@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SynthBoarders - Rhythm Typing Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Creepster&display=swap" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Orbitron', sans-serif;
+            color: white;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+        #overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: space-between;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        /* Three main sections of the overlay */
+        .overlay-section {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            width: 33.33%;
+            box-sizing: border-box;
+        }
+        
+        /* Left section - Character */
+        #left-section {
+            align-items: flex-start;
+            justify-content: center;
+        }
+        
+        #character-info {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #00ff00;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 50px;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+        }
+        
+        /* Middle section - Typing */
+        #middle-section {
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        
+        #typing-container {
+            margin-bottom: 100px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px 40px;
+            border-radius: 10px;
+            border: 1px solid #00ffff;
+            min-width: 300px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        
+        #target {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00ff00;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
+        }
+        
+        #input {
+            font-size: 28px;
+            color: white;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+        }
+        
+        /* Right section - Enemies/Info */
+        #right-section {
+            align-items: flex-end;
+            justify-content: center;
+        }
+        
+        #game-info {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #00ff00;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 50px;
+            text-align: right;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+        }
+        
+        /* Track info and lyrics display */
+        #trackInfo {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 20;
+            text-shadow: 0 0 10px #00ffff;
+        }
+        
+        #lyricsDisplay {
+            position: absolute;
+            bottom: 50px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 24px;
+            opacity: 0;
+            transition: opacity 0.5s;
+            z-index: 20;
+            text-shadow: 0 0 15px #00ffff;
+        }
+        
+        /* Lyric Success/Fail Indicator */
+        #lyricIndicator {
+            position: absolute;
+            top: 30%;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 20;
+        }
+        
+        /* Get Ready Message */
+        #get-ready-message {
+            position: absolute;
+            top: 40%;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 42px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
+            z-index: 25;
+            display: none; /* Hidden by default */
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+        
+        /* Menu styles */
+        .menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+        
+        .menuTitle {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: #00ff00;
+            text-shadow: 0 0 20px #00ff00, 0 0 40px #00ff00;
+            letter-spacing: 3px;
+        }
+        
+        #gameTitle {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        #titleTop {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 54px;
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff, 0 0 20px #00ffff;
+        }
+        
+        #titleBottom {
+            font-family: 'Creepster', sans-serif;
+            font-style: italic;
+            font-size: 42px;
+            color: #00ffcc;
+            text-shadow: 0 0 10px #00ffcc, 0 0 15px #ff00ff;
+        }
+        
+        .menuButton, #startButton {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 24px;
+            background: #003300;
+            color: white;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 2px;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+        
+        .menuButton:hover, #startButton:hover {
+            background: #00cc00;
+            transform: translateY(-3px);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+        }
+        
+        /* Animation classes */
+        .shake {
+            animation: shake 0.5s;
+        }
+        
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+            100% { transform: translateX(0); }
+        }
+        
+        /* Splash screen overlay */
+        #splashOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        #splashLogo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 72px;
+            color: #ff00ff;
+            text-shadow: 0 0 15px #ff00ff, 0 0 30px #00ffff;
+            margin-bottom: 50px;
+            text-align: center;
+        }
+        
+        .splashTitle {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 72px;
+            color: #ff00ff;
+            text-shadow: 0 0 15px #ff00ff, 0 0 30px #00ffff;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .splashSubtitle {
+            font-family: 'Creepster', sans-serif;
+            font-style: italic;
+            font-size: 48px;
+            color: #00ffcc;
+            text-shadow: 0 0 10px #00ffcc, 0 0 15px #ff00ff;
+            margin-bottom: 50px;
+            text-align: center;
+        }
+        
+        #enterGameButton {
+            padding: 20px 40px;
+            font-size: 28px;
+            background: linear-gradient(to right, #003366, #006699);
+            color: white;
+            border: 2px solid #00ffcc;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 15px #00ffcc;
+        }
+        
+        #enterGameButton:hover {
+            background: linear-gradient(to right, #004080, #0088cc);
+            transform: scale(1.05);
+            box-shadow: 0 0 25px #00ffcc;
+        }
+    </style>
+</head>
+<body>
+    <!-- Main Canvas for Three.js -->
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- Audio element for background music -->
+    <audio id="audioElement" preload="auto"></audio>
+    
+    <!-- Game Info Overlay -->
+    <div id="trackInfo">
+        <span id="trackName">No Track Selected</span>
+    </div>
+    
+    <!-- Splash Screen Overlay -->
+    <div id="splashOverlay">
+        <div id="splashLogo">
+            <div class="splashTitle">Synthpocalypse Now!</div>
+            <div class="splashSubtitle">War of Words</div>
+        </div>
+        <button id="enterGameButton">Enable Music & Enter Game</button>
+    </div>
+    
+    <!-- Lyrics Display -->
+    <div id="lyricsDisplay"></div>
+    
+    <!-- Lyric Success/Fail Indicator -->
+    <div id="lyricIndicator"></div>
+    
+    <!-- Get Ready Message -->
+    <div id="get-ready-message">
+        Get Ready...
+    </div>
+    
+    <!-- Three-Section Overlay -->
+    <div id="overlay">
+        <!-- Left Section - Character -->
+        <div id="left-section" class="overlay-section">
+            <div id="character-info">
+                <h3>Character</h3>
+                <p>Level: <span id="character-level">1</span></p>
+                <p>Speed: <span id="character-speed">Normal</span></p>
+                <p>Score: <span id="character-score">0</span></p>
+            </div>
+        </div>
+        
+        <!-- Middle Section - Typing -->
+        <div id="middle-section" class="overlay-section">
+            <div id="typing-container">
+                <div id="target"></div>
+                <div id="input"></div>
+            </div>
+        </div>
+        
+        <!-- Right Section - Enemies/Info -->
+        <div id="right-section" class="overlay-section">
+            <div id="game-info">
+                <h3>Game Info</h3>
+                <p>Current Track: <span id="current-track">None</span></p>
+                <p>Accuracy: <span id="accuracy">0%</span></p>
+                <p>Targets Hit: <span id="targets-hit">0</span></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Menu -->
+    <div id="mainMenu" class="menu" style="display: none;">
+        <div id="gameTitle">
+            <div id="titleTop">Synthpocalypse Now!</div>
+            <div id="titleBottom">War of Words</div>
+        </div>
+        <button id="startButton">Start Game</button>
+    </div>
+    
+    <!-- Pause Menu (Initially Hidden) -->
+    <div id="pauseMenu" class="menu" style="display: none;">
+        <h1 class="menuTitle">Game Paused</h1>
+        <button id="resumeButton" class="menuButton">Resume</button>
+        <button id="restartLevelButton" class="menuButton">Restart Battle</button>
+        <button id="restartCampaignButton" class="menuButton">Restart Campaign</button>
+        <button id="quitButton" class="menuButton">Quit to Main Menu</button>
+    </div>
+    
+    <!-- Debug Info -->
+    <div id="debug-info" style="position: absolute; bottom: 10px; left: 10px; color: #00ff00; font-size: 12px; z-index: 100;"></div>
+    
+    <!-- Import Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // Track list
+        const tracks = [
+            {
+                name: "March at Dawn",
+                src: "assets/music/1 March at Dawn.ogg",
+                lrc: "assets/lyrics/1 March at Dawn.lrc",
+                beats: [0, 3.5, 7.0, 10.5, 14.0] // First few beats for testing
+            }
+            // Note: Second track commented out until asset is available
+            /*
+            {
+                name: "Doubts Dismissed",
+                src: "assets/music/2 Doubts Dismissed.ogg",
+                lrc: "assets/lyrics/1 March at Dawn.lrc", // Reuse the lyrics for now
+                beats: [0, 3.2, 6.4, 9.6, 12.8] // Sample beats
+            }
+            */
+        ];
+        
+        // Target lyrics for March at Dawn - using more challenging multi-word phrases
+        const marchAtDawnLyrics = [
+            "PROUD DAY",
+            "HONOR LAY",
+            "CALL TO ARMS",
+            "UNKNOWN HARMS",
+            "SOARING HIGHS",
+            "STORMY SIGH",
+            "DAWNING LIGHT",
+            "INTO THE FIGHT",
+            "RIGHTEOUS ZEAL",
+            "WHOLE ORDEAL",
+            "RIGHTEOUS ZEAL",
+            "WHOLE ORDEAL",
+            "ARMORS SHEEN",
+            "ONCE HAD SEEMED",
+            "CONVICTION REIGNED",
+            "HAS BEEN STAINED",
+            "FOREBODING SOUND",
+            "MY FEARS ABOUND",
+            "DAWNING LIGHT",
+            "INTO THE FIGHT",
+            "RIGHTEOUS ZEAL",
+            "WHOLE ORDEAL",
+            "WARS EMBRACE",
+            "TRUTHS DIM TRACE",
+            "GLORYS SAKE",
+            "MOUNTAINS QUAKE",
+            "DAWNING LIGHT",
+            "INTO THE FIGHT",
+            "RIGHTEOUS ZEAL",
+            "WHOLE ORDEAL",
+            "SOUL NOW WEEPS",
+            "FADES INTO NIGHT",
+            "HARSH DAYLIGHT",
+            "PATH GROWS STEEP",
+            "SOUL NOW WEEPS",
+            "MY SOUL NOW WEEPS"
+        ];
+        
+        // Official embedded lyrics from the LRC file
+        const officialLyrics = `[ti:1 March at Dawn]
+[ar:Vanitas]
+[al:Synth-pocalypse Now!]
+[au:Matthew Walker]
+[by:Matthew Walker]
+[la:EN]
+[re:LRCgenerator.com]
+[ve:4.00]
+
+[00:11.36]IN THE BLAZE OF YOUTH'S PROUD DAY,
+[00:16.04]MARCHING FORTH WHERE HONOR LAY,
+[00:20.45]BELIEF AS CLEAR AS A CALL TO ARMS,
+[00:25.12]THE SOUND OF GLORY, IN THE FACE OF UNKNOWN HARMS.
+
+[00:33.95]YET BENEATH THE HYMNS OF SOARING HIGHS,
+[00:39.13]HIDE WHISPERS OF A STORMY SIGH.
+
+[00:44.17]LOSING SIGHT IN THE DAWNING LIGHT,
+[00:48.28]I CHARGE AHEAD, INTO THE FIGHT,
+[00:53.35]HEART ABLAZE WITH RIGHTEOUS ZEAL,
+[00:57.64]BLINDED TO THE WHOLE ORDEAL.
+
+[01:21.70]HEART ABLAZE WITH RIGHTEOUS ZEAL,
+[01:26.35]BLINDED TO THE WHOLE ORDEAL.
+
+[01:40.39]FIRST CRACKS IN THE ARMOR'S SHEEN,
+[01:44.58]NOT ALL IS AS IT ONCE HAD SEEMED,
+[01:49.38]SEEDS OF DOUBT, WHERE CONVICTION REIGNED,
+[01:53.90]BY THE BLOOD OF COUNTLESS, FAITH HAS BEEN STAINED.
+
+[02:28.64]FIRST CRACKS, A FOREBODING SOUND,
+[02:35.65]AS THE GROUND BENEATH SHAKES, MY FEARS ABOUND.
+
+[02:44.15]LOSING SIGHT IN THE DAWNING LIGHT,
+[02:47.71]AND I, I CHARGE AHEAD, INTO THE FIGHT,
+[02:53.46]HEART ABLAZE WITH RIGHTEOUS ZEAL,
+[02:57.38]BLINDED TO THE WHOLE ORDEAL.
+
+[03:22.69]THROUGH THE FOG OF WAR'S EMBRACE,
+[03:27.15]SEARCHING FOR THE TRUTH'S DIM TRACE,
+[03:31.85]SIRENS CALL NOT FOR GLORY'S SAKE,
+[03:36.51]I RETURN TO HELL, AS THE MOUNTAINS QUAKE.
+[03:49.78]LOSING SIGHT IN THE DAWNING LIGHT,
+[03:53.21]AND I, I CHARGE AHEAD, INTO THE FIGHT,
+[03:58.99]HEART ABLAZE WITH RIGHTEOUS ZEAL,
+[04:03.11]BLINDED TO THE WHOLE ORDEAL.
+
+[04:09.01]IN THE SILENCE, MY SOUL NOW WEEPS.
+
+[04:37.76]AS THE DAWN FADES INTO NIGHT,
+[04:42.08]LESSONS LEARNED IN THE HARSH DAYLIGHT,
+[04:46.79]WITH EACH STEP, THE PATH GROWS STEEP,
+[04:51.72]IN THE SILENCE, MY SOUL NOW WEEPS.
+
+[05:06.90]IN THE SILENCE, MY SOUL NOW WEEPS.`;
+        
+        // Current level tracking
+        let currentLevel = 0; // Start at level 1 (index 0)
+        const audioElement = document.getElementById('audioElement');
+        
+        // Beat tracking variables
+        let currentBeats = [];
+        let nextBeatIndex = 0;
+        
+        // Lyrics tracking variables
+        let currentLyrics = [];
+        let nextLyricIndex = 0;
+        
+        // Game state tracking
+        let gameStarted = false;
+        let currentTargetWord = "";
+        let currentPlayerInput = "";
+        let currentLyricIndex = -1;
+        let timeWindow = 4; // Default 4 seconds to type each lyric
+        let currentTimeWindow = 4; // Variable time window that adapts to lyrics
+        let targetStartTime = null;
+        let justCompletedTarget = false; // Flag to track if we just completed a target
+        
+        // Initialize Three.js scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000033); // Dark blue background
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // Create a blue grid plane for the "ground"
+        const gridGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
+        const gridMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ffff, 
+            wireframe: true, 
+            transparent: true,
+            opacity: 0.3 
+        });
+        const grid = new THREE.Mesh(gridGeometry, gridMaterial);
+        grid.rotation.x = -Math.PI / 2; // Rotate to horizontal
+        scene.add(grid);
+        
+        // Add some decorative elements to the scene
+        // Sun/moon in the distance
+        const sunGeometry = new THREE.SphereGeometry(50, 32, 32);
+        const sunMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff00ff,
+            transparent: true,
+            opacity: 0.7
+        });
+        const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+        sun.position.set(0, 100, -500);
+        scene.add(sun);
+        
+        // Add some mountains in the background
+        function createMountain(x, height, z) {
+            const mountainGeometry = new THREE.ConeGeometry(height/2, height, 4);
+            const mountainMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x880088,
+                wireframe: true
+            });
+            const mountain = new THREE.Mesh(mountainGeometry, mountainMaterial);
+            mountain.position.set(x, height/2, z);
+            scene.add(mountain);
+        }
+        
+        // Create several mountains
+        createMountain(-200, 100, -400);
+        createMountain(-100, 150, -350);
+        createMountain(150, 120, -380);
+        createMountain(250, 90, -420);
+        
+        // Add a 3D character model in the left section
+        const characterGeometry = new THREE.BoxGeometry(5, 10, 5);
+        const characterMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff00ff, // Neon magenta
+            wireframe: true
+        });
+        const character = new THREE.Mesh(characterGeometry, characterMaterial);
+        character.position.set(-30, 6, 0); // Position on the left third of screen
+        scene.add(character);
+        
+        // Create character details (arms, legs)
+        // Arms
+        const armGeometry = new THREE.BoxGeometry(2, 6, 2);
+        const leftArm = new THREE.Mesh(armGeometry, characterMaterial);
+        leftArm.position.set(-4, 0, 0);
+        character.add(leftArm);
+        
+        const rightArm = new THREE.Mesh(armGeometry, characterMaterial);
+        rightArm.position.set(4, 0, 0);
+        character.add(rightArm);
+        
+        // Legs
+        const legGeometry = new THREE.BoxGeometry(2, 6, 2);
+        const leftLeg = new THREE.Mesh(legGeometry, characterMaterial);
+        leftLeg.position.set(-2, -8, 0);
+        character.add(leftLeg);
+        
+        const rightLeg = new THREE.Mesh(legGeometry, characterMaterial);
+        rightLeg.position.set(2, -8, 0);
+        character.add(rightLeg);
+        
+        // Head
+        const headGeometry = new THREE.BoxGeometry(4, 4, 4);
+        const headMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff00ff, // Same as body
+            wireframe: true
+        });
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.set(0, 7, 0);
+        character.add(head);
+        
+        // Add a simple 3D enemy avatar in the right section
+        const enemyGeometry = new THREE.SphereGeometry(5, 32, 32);
+        const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Neon cyan
+        const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+        enemy.position.set(30, 6, 0); // Position in the right third of screen
+        scene.add(enemy);
+        
+        // Position camera
+        camera.position.y = 10;
+        camera.position.z = 50;
+        camera.lookAt(0, 0, 0);
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate sun
+            if (typeof sun !== 'undefined') {
+                sun.rotation.y += 0.005;
+            }
+            
+            // Move grid to create forward motion effect
+            if (typeof grid !== 'undefined') {
+                grid.position.z += 0.1;
+                if (grid.position.z > 20) {
+                    grid.position.z = 0;
+                }
+            }
+            
+            // Animate character
+            if (typeof character !== 'undefined') {
+                character.rotation.y += 0.01;
+                
+                // Make character bounce slightly
+                const time = Date.now() * 0.001;  // Convert to seconds
+                character.position.y = 6 + Math.sin(time * 2) * 0.5;
+                
+                // Make arms swing
+                if (character.children.length >= 2) {
+                    character.children[0].rotation.x = Math.sin(time * 3) * 0.3;
+                    character.children[1].rotation.x = Math.sin(time * 3 + Math.PI) * 0.3;
+                }
+            }
+            
+            // Animate enemy
+            if (typeof enemy !== 'undefined') {
+                enemy.rotation.y += 0.01;
+            }
+            
+            renderer.render(scene, camera);
+            
+            // Target timing and detection logic
+            if (gameStarted && currentLyrics.length > 0 && nextLyricIndex < currentLyrics.length) {
+                const currentTime = audioElement.currentTime;
+                
+                // Debug information to help identify issues
+                const debugInfoElement = document.getElementById('debug-info');
+                if (debugInfoElement) {
+                    let nextTime = nextLyricIndex < currentLyrics.length ? currentLyrics[nextLyricIndex].time : 0;
+                    let timeRemaining = nextTime - currentTime;
+                    
+                    // Add current target info
+                    if (currentTargetWord) {
+                        debugInfoElement.textContent = `Time: ${currentTime.toFixed(2)}s | Next: ${nextTime.toFixed(2)}s | Remaining: ${timeRemaining.toFixed(2)}s | Target: ${currentTargetWord}`;
+                    } else {
+                        debugInfoElement.textContent = `Time: ${currentTime.toFixed(2)}s | Next: ${nextTime.toFixed(2)}s | Remaining: ${timeRemaining.toFixed(2)}s`;
+                    }
+                    
+                    // Add lyric info if available
+                    if (nextLyricIndex < currentLyrics.length) {
+                        const nextLyric = currentLyrics[nextLyricIndex].lyric.substring(0, 20) + "...";
+                        debugInfoElement.textContent += ` | Next Lyric: ${nextLyric}`;
+                    }
+                }
+                
+                // Check if it's time to show a new lyric
+                if (currentTime >= currentLyrics[nextLyricIndex].time) {
+                    console.log('Lyric at time:', currentLyrics[nextLyricIndex].time);
+                    console.log('Lyric:', currentLyrics[nextLyricIndex].lyric);
+                    
+                    // Debug output for each lyric check, to help with timing calibration
+                    console.log(`Lyric at time: ${currentLyrics[nextLyricIndex].time}`);
+                    console.log(`Lyric: ${currentLyrics[nextLyricIndex].lyric}`);
+                    if (currentLyrics[nextLyricIndex].target) {
+                        console.log(`Target: ${currentLyrics[nextLyricIndex].target}`);
+                    }
+                    
+                    if (currentLyrics[nextLyricIndex].target) {
+                        console.log('Target:', currentLyrics[nextLyricIndex].target);
+                        
+                        // Clear previous target if it's still showing
+                        if (currentTargetWord && targetStartTime) {
+                            // Only mark as failed if we didn't just complete it
+                            if (!justCompletedTarget) {
+                                showLyricIndicator("Failed: " + currentTargetWord, false);
+                                // Update total targets count for stats
+                                totalTargets++;
+                            }
+                        }
+                        
+                        // Reset completion flag for new target
+                        justCompletedTarget = false;
+                        
+                        currentTargetWord = currentLyrics[nextLyricIndex].target;
+                        currentPlayerInput = "";
+                        currentLyricIndex = nextLyricIndex;
+                        targetStartTime = currentTime;
+                        
+                        // Calculate adaptive time window based on next lyric
+                        currentTimeWindow = timeWindow; // Default to 4 seconds
+                        
+                        // If there's another lyric coming, check its timing
+                        if (nextLyricIndex + 1 < currentLyrics.length) {
+                            const currentLyricTime = currentLyrics[nextLyricIndex].time;
+                            const nextLyricTime = currentLyrics[nextLyricIndex + 1].time;
+                            const timeBetweenLyrics = (nextLyricTime - currentLyricTime); // In seconds
+                            
+                            // If next lyric comes in less than 4 seconds, use that time instead
+                            // Subtract a small buffer (0.3s) for smoother transition
+                            if (timeBetweenLyrics < timeWindow) {
+                                currentTimeWindow = Math.max(timeBetweenLyrics - 0.3, 1.0); // Minimum 1s window
+                                console.log('Reduced time window:', currentTimeWindow);
+                            }
+                        }
+                        
+                        // Update the target display - ensure it's visible
+                        document.getElementById('target').textContent = currentTargetWord;
+                        document.getElementById('input').textContent = "";
+                        document.getElementById('input').style.color = "white";
+                        document.getElementById('typing-container').style.display = 'block';
+                        
+                        // Hide any "Get Ready" message
+                        document.getElementById('get-ready-message').style.display = 'none';
+                    }
+                    
+                    // Display the lyric on screen with punctuation removed
+                    const lyricsElement = document.getElementById('lyricsDisplay');
+                    const cleanLyric = currentLyrics[nextLyricIndex].lyric.replace(/[^\w\s]/g, '');
+                    lyricsElement.textContent = cleanLyric;
+                    lyricsElement.style.opacity = 1;
+                    
+                    // Calculate fade out timing based on next lyric
+                    let fadeOutTime = 4000; // Default 4 seconds
+                    
+                    // If there's another lyric coming, check its timing
+                    if (nextLyricIndex + 1 < currentLyrics.length) {
+                        const currentLyricTime = currentLyrics[nextLyricIndex].time;
+                        const nextLyricTime = currentLyrics[nextLyricIndex + 1].time;
+                        const timeBetweenLyrics = (nextLyricTime - currentLyricTime) * 1000; // Convert to milliseconds
+                        
+                        // If next lyric comes in less than 4 seconds, adjust fadeout time
+                        // Leave a small buffer (300ms) for a smoother transition
+                        if (timeBetweenLyrics < 4000) {
+                            fadeOutTime = Math.max(timeBetweenLyrics - 300, 500); // Minimum 0.5s fadeout
+                        }
+                    }
+                    
+                    // Fade out with appropriate timing
+                    setTimeout(() => {
+                        lyricsElement.style.opacity = 0;
+                    }, fadeOutTime);
+                    
+                    // Important: Increment nextLyricIndex to move to the next lyric
+                    nextLyricIndex++;
+                }
+                
+                // Check if time window for current target has expired
+                if (currentTargetWord && targetStartTime && currentTime >= targetStartTime + currentTimeWindow) {
+                    console.log("Time expired for target:", currentTargetWord);
+                    showLyricIndicator("Failed: " + currentTargetWord, false);
+                    
+                    // Update total targets count for stats
+                    totalTargets++;
+                    
+                    // Count the remaining untyped characters as incorrect inputs
+                    const remainingChars = currentTargetWord.length - currentPlayerInput.length;
+                    if (remainingChars > 0) {
+                        incorrectInputs += remainingChars;
+                        
+                        // Update accuracy to reflect the incomplete word
+                        const accuracy = Math.round((correctInputs / (correctInputs + incorrectInputs)) * 100);
+                        document.getElementById('accuracy').textContent = accuracy + "%";
+                    }
+                    
+                    // Clear the target display but don't hide the container
+                    document.getElementById('target').textContent = "";
+                    document.getElementById('input').textContent = "";
+                    
+                    // Reset target variables
+                    currentTargetWord = "";
+                    currentPlayerInput = "";
+                    targetStartTime = null;
+                }
+                
+                // Handle section gap - if we have more than 4 seconds until the next lyric, show "Get Ready"
+                if (currentLyrics.length > 0 && nextLyricIndex < currentLyrics.length && !currentTargetWord) {
+                    const nextLyricTime = currentLyrics[nextLyricIndex].time;
+                    const timeUntilNextLyric = nextLyricTime - currentTime;
+                    
+                    // Show "Get Ready" if next lyric is more than 4 seconds away
+                    if (timeUntilNextLyric > 4) {
+                        // We're in a gap between sections - ensure typing UI is ready
+                        document.getElementById('typing-container').style.display = 'block';
+                        document.getElementById('target').textContent = "";
+                        document.getElementById('input').textContent = "";
+                        document.getElementById('get-ready-message').style.display = 'block';
+                    } else if (timeUntilNextLyric <= 0.05 && timeUntilNextLyric > -0.2) {
+                        // More precise timing: only force advance if we're extremely close to the time
+                        // This reduces unnecessary forced advances while still preventing getting stuck
+                        console.log("Forcing advance to next lyric due to proximity");
+                        const lyricsElement = document.getElementById('lyricsDisplay');
+                        const cleanLyric = currentLyrics[nextLyricIndex].lyric.replace(/[^\w\s]/g, '');
+                        lyricsElement.textContent = cleanLyric;
+                        lyricsElement.style.opacity = 1;
+                        
+                        // If this lyric has a target, update the target word
+                        if (currentLyrics[nextLyricIndex].target) {
+                            currentTargetWord = currentLyrics[nextLyricIndex].target;
+                            const cleanTarget = currentTargetWord.replace(/[^\w\s]/g, '');
+                            document.getElementById('target').textContent = cleanTarget;
+                            document.getElementById('input').textContent = "";
+                            document.getElementById('get-ready-message').style.display = 'none';
+                            targetStartTime = currentTime;
+                        }
+                        
+                        // Increment to the next lyric
+                        nextLyricIndex++;
+                    }
+                }
+            }
+        }
+
+        // Function to show lyric indicator (success or failure)
+        function showLyricIndicator(text, success) {
+            const indicatorElement = document.getElementById('lyricIndicator');
+            indicatorElement.textContent = text;
+            indicatorElement.style.color = success ? "#00ff00" : "#ff0000";
+            indicatorElement.style.textShadow = success ? "0 0 20px #00ff00" : "0 0 20px #ff0000";
+            indicatorElement.style.opacity = 1;
+            
+            // Make sure the typing container is always visible after showing an indicator
+            document.getElementById('typing-container').style.display = 'block';
+            
+            // Fade out after 1.5 seconds
+            setTimeout(() => {
+                indicatorElement.style.opacity = 0;
+            }, 1500);
+        }
+        
+        // Variables for tracking game stats
+        let targetsHit = 0;
+        let totalTargets = 0;
+        let correctInputs = 0;
+        let totalInputs = 0;
+        let incorrectInputs = 0;
+        
+        // Function to update the track
+        function updateTrack() {
+            if (currentLevel >= tracks.length) {
+                currentLevel = 0;
+            }
+            
+            // Reset target tracking variables
+            currentTargetWord = "";
+            currentPlayerInput = "";
+            targetStartTime = null;
+            
+            audioElement.src = tracks[currentLevel].src;
+            document.getElementById('trackName').textContent = `Level ${currentLevel + 1}: ${tracks[currentLevel].name}`;
+            document.getElementById('current-track').textContent = tracks[currentLevel].name;
+            
+            // Reset beats and lyrics
+            currentBeats = tracks[currentLevel].beats || [];
+            nextBeatIndex = 0;
+            
+            // Reset tracking stats
+            document.getElementById('targets-hit').textContent = "0";
+            document.getElementById('accuracy').textContent = "0%";
+            
+            // Load lyrics if available
+            loadLRC();
+            
+            // Start playing the track
+            audioElement.play();
+        }
+        
+        // Function to load and parse LRC file
+        function loadLRC() {
+            // Clear current lyrics
+            currentLyrics = [];
+            nextLyricIndex = 0;
+            
+            // For now, hardcode the lyrics for March at Dawn
+            if (tracks[currentLevel].lrc) {
+                console.log(`Loading lyrics for ${tracks[currentLevel].name}`);
+                
+                // Create lyric objects with timestamps (in seconds) and text
+                // Using exact timestamps from the LRC file - properly calibrated
+                const rawLyrics = [
+                    // First section - timestamps are correct
+                    { time: 11.36, text: "IN THE BLAZE OF YOUTH'S PROUD DAY," },
+                    { time: 16.04, text: "MARCHING FORTH WHERE HONOR LAY," },
+                    { time: 20.45, text: "BELIEF AS CLEAR AS A CALL TO ARMS," },
+                    { time: 25.12, text: "THE SOUND OF GLORY, IN THE FACE OF UNKNOWN HARMS." },
+                    { time: 33.95, text: "YET BENEATH THE HYMNS OF SOARING HIGHS," },
+                    { time: 39.13, text: "HIDE WHISPERS OF A STORMY SIGH." },
+                    { time: 44.17, text: "LOSING SIGHT IN THE DAWNING LIGHT," },
+                    { time: 48.28, text: "I CHARGE AHEAD, INTO THE FIGHT," },
+                    { time: 53.35, text: "HEART ABLAZE WITH RIGHTEOUS ZEAL," },
+                    { time: 57.64, text: "BLINDED TO THE WHOLE ORDEAL." },
+                    { time: 81.70, text: "HEART ABLAZE WITH RIGHTEOUS ZEAL," },
+                    { time: 86.35, text: "BLINDED TO THE WHOLE ORDEAL." },
+                    
+                    // Second section - recalibrated with -10s offset to fix timing
+                    { time: 100.39, text: "FIRST CRACKS IN THE ARMOR'S SHEEN," },       // Was 105.39
+                    { time: 104.58, text: "NOT ALL IS AS IT ONCE HAD SEEMED," },        // Was 109.58
+                    { time: 109.38, text: "SEEDS OF DOUBT, WHERE CONVICTION REIGNED," },// Was 114.38
+                    { time: 113.90, text: "BY THE BLOOD OF COUNTLESS, FAITH HAS BEEN STAINED." }, // Was 118.90
+                    
+                    // Third section - recalibrated timestamps
+                    { time: 148.64, text: "FIRST CRACKS, A FOREBODING SOUND," },        // Was 153.64
+                    { time: 155.65, text: "AS THE GROUND BENEATH SHAKES, MY FEARS ABOUND." }, // Was 160.65
+                    { time: 164.15, text: "LOSING SIGHT IN THE DAWNING LIGHT," },       // Was 169.15
+                    { time: 167.71, text: "AND I, I CHARGE AHEAD, INTO THE FIGHT," },   // Was 172.71
+                    { time: 173.46, text: "HEART ABLAZE WITH RIGHTEOUS ZEAL," },        // Was 178.46
+                    { time: 177.38, text: "BLINDED TO THE WHOLE ORDEAL." },             // Was 182.38
+                    
+                    // Fourth section - recalibrated timestamps
+                    { time: 202.69, text: "THROUGH THE FOG OF WAR'S EMBRACE," },        // Was 207.69
+                    { time: 207.15, text: "SEARCHING FOR THE TRUTH'S DIM TRACE," },     // Was 212.15
+                    { time: 211.85, text: "SIRENS CALL NOT FOR GLORY'S SAKE," },        // Was 216.85
+                    { time: 216.51, text: "I RETURN TO HELL, AS THE MOUNTAINS QUAKE." },// Was 221.51
+                    { time: 229.78, text: "LOSING SIGHT IN THE DAWNING LIGHT," },       // Was 234.78
+                    { time: 233.21, text: "AND I, I CHARGE AHEAD, INTO THE FIGHT," },   // Was 238.21
+                    { time: 238.99, text: "HEART ABLAZE WITH RIGHTEOUS ZEAL," },        // Was 243.99
+                    { time: 243.11, text: "BLINDED TO THE WHOLE ORDEAL." },             // Was 248.11
+                    
+                    // Final section - further recalibrated timestamps
+                    { time: 249.01, text: "IN THE SILENCE, MY SOUL NOW WEEPS." },       // Was 254.01
+                    { time: 277.76, text: "AS THE DAWN FADES INTO NIGHT," },            // Was 282.76
+                    { time: 282.08, text: "LESSONS LEARNED IN THE HARSH DAYLIGHT," },   // Was 287.08
+                    { time: 286.79, text: "WITH EACH STEP, THE PATH GROWS STEEP," },    // Was 291.79
+                    { time: 291.72, text: "IN THE SILENCE, MY SOUL NOW WEEPS." },       // Was 296.72
+                    { time: 306.90, text: "IN THE SILENCE, MY SOUL NOW WEEPS." }        // Was 311.90
+                ];
+                
+                // Match lyrics with target words
+                let targetIndex = 0;
+                
+                // Process each lyric and add targets
+                rawLyrics.forEach(lyric => {
+                    // Create a copy of the lyric object
+                    const lyricObj = {
+                        time: lyric.time,
+                        lyric: lyric.text
+                    };
+                    
+                    // Check if we should assign a target to this lyric
+                    if (targetIndex < marchAtDawnLyrics.length) {
+                        const target = marchAtDawnLyrics[targetIndex];
+                        
+                        // Improved target matching - make both strings comparable by removing punctuation
+                        // and checking if the target keywords are contained in the lyric
+                        const cleanLyric = lyric.text.replace(/[^\w\s]/g, '');
+                        const cleanTarget = target.replace(/[^\w\s]/g, '');
+                        
+                        // Special handling for the final "MY SOUL NOW WEEPS" line
+                        if (lyric.time >= 306.0 && cleanLyric.includes("MY SOUL NOW WEEPS")) {
+                            lyricObj.target = "MY SOUL NOW WEEPS";
+                            console.log(`Assigning final target "MY SOUL NOW WEEPS" to lyric: "${lyric.text}" at time ${lyric.time}`);
+                            targetIndex++;
+                        }
+                        // Check if the clean target is part of the clean lyric
+                        else if (cleanLyric.includes(cleanTarget) || 
+                            // Special cases for phrases that might need exact matching
+                            (cleanLyric.includes("RIGHTEOUS ZEAL") && cleanTarget === "RIGHTEOUS ZEAL") ||
+                            (cleanLyric.includes("WHOLE ORDEAL") && cleanTarget === "WHOLE ORDEAL")) {
+                            
+                            lyricObj.target = target;
+                            console.log(`Assigning target "${target}" to lyric: "${lyric.text}" at time ${lyric.time}`);
+                            targetIndex++;
+                        }
+                    }
+                    
+                    // Add to current lyrics array
+                    currentLyrics.push(lyricObj);
+                });
+                
+                console.log("Successfully matched lyrics with targets");
+                console.log(`Loaded ${currentLyrics.length} lyric lines for ${tracks[currentLevel].name}`);
+                
+                // Debug output of all lyrics with targets
+                for (let i = 0; i <currentLyrics.length; i++) {
+                    const lyric = currentLyrics[i];
+                    if (lyric.target) {
+                        console.log(`Lyric at ${lyric.time}s: "${lyric.lyric}" - Target: "${lyric.target}"`);
+                    } else {
+                        console.log(`Lyric at ${lyric.time}s: "${lyric.lyric}" - No target`);
+                    }
+                }
+                
+                // Add additional debugging output to help identify timing issues at specific sections
+                console.log("--- Final section timestamps ---");
+                for (let i = 0; i < currentLyrics.length; i++) {
+                    if (currentLyrics[i].lyric.includes("MY SOUL NOW WEEPS") || 
+                        currentLyrics[i].lyric.includes("FADES INTO NIGHT") ||
+                        currentLyrics[i].lyric.includes("HARSH DAYLIGHT") ||
+                        currentLyrics[i].lyric.includes("PATH GROWS STEEP")) {
+                        console.log(`Lyric at ${currentLyrics[i].time}s: "${currentLyrics[i].lyric}" - Has target: ${currentLyrics[i].target ? "Yes" : "No"}`);
+                    }
+                }
+            }
+        }
+        
+        // Function to start background music
+        function startMusic() {
+            // Add error handler for audio loading failures
+            audioElement.onerror = function() {
+                console.error('Error loading audio file:', audioElement.src);
+                
+                // Display error message to player
+                const trackDisplay = document.getElementById('trackName');
+                trackDisplay.textContent = 'Error loading audio - Check console';
+                trackDisplay.style.color = 'red';
+                
+                // Try to advance to next track after a delay
+                setTimeout(() => {
+                    currentLevel++;
+                    updateTrack();
+                }, 3000);
+            };
+            
+            // Set source but don't autoplay - this will happen on user interaction
+            audioElement.src = "assets/music/title_concrete_jungle.mp3";
+            
+            // Update track display
+            const trackDisplay = document.getElementById('trackName');
+            trackDisplay.textContent = "Title: Concrete Jungle";
+            trackDisplay.style.color = '#00ffcc';
+        }
+        
+        // Function to stop background music
+        function stopMusic() {
+            audioElement.pause();
+            audioElement.currentTime = 0; // Reset to beginning
+        }
+        
+        // Function to pause background music
+        function pauseMusic() {
+            audioElement.pause();
+        }
+        
+        // Function to resume background music
+        function resumeMusic() {
+            audioElement.play();
+        }
+        
+        // Add event listener for track completion
+        audioElement.addEventListener('ended', () => {
+            currentLevel++;
+            updateTrack();
+        });
+        
+        // Set the initial audio source
+        audioElement.src = tracks[currentLevel].src;
+        
+        // Start game logic
+        document.getElementById('startButton').addEventListener('click', () => {
+            // Hide main menu
+            document.getElementById('mainMenu').style.display = 'none';
+            
+            // Start the game
+            gameStarted = true;
+            updateTrack();
+            audioElement.play().catch(error => console.error("Audio play error:", error));
+        });
+
+        document.getElementById('resumeButton').addEventListener('click', () => {
+            // Hide pause menu
+            document.getElementById('pauseMenu').style.display = 'none';
+            
+            // Resume audio
+            audioElement.play();
+            
+            // Resume game
+            gameStarted = true;
+        });
+        
+        document.getElementById('restartLevelButton').addEventListener('click', () => {
+            // Hide pause menu
+            document.getElementById('pauseMenu').style.display = 'none';
+            
+            // Hide get ready message
+            document.getElementById('get-ready-message').style.display = 'none';
+            
+            // Restart current track from beginning
+            audioElement.currentTime = 0;
+            audioElement.play();
+            
+            // Reset game variables
+            currentLyricIndex = 0;
+            nextLyricIndex = 0;
+            nextBeatIndex = 0;
+            currentTargetWord = "";
+            currentPlayerInput = "";
+            targetStartTime = null;
+            
+            // Reset stats
+            targetsHit = 0;
+            totalTargets = 0;
+            correctInputs = 0;
+            totalInputs = 0;
+            incorrectInputs = 0;
+            document.getElementById('targets-hit').textContent = "0";
+            document.getElementById('accuracy').textContent = "0%";
+            document.getElementById('character-score').textContent = "0";
+            
+            // Clear displays
+            document.getElementById('target').textContent = "";
+            document.getElementById('input').textContent = "";
+            
+            // Resume game
+            gameStarted = true;
+        });
+        
+        document.getElementById('restartCampaignButton').addEventListener('click', () => {
+            // Hide pause menu
+            document.getElementById('pauseMenu').style.display = 'none';
+            
+            // Hide get ready message
+            document.getElementById('get-ready-message').style.display = 'none';
+            
+            // Reset to first level
+            currentLevel = 0;
+            
+            // Reset game variables
+            currentLyricIndex = 0;
+            nextLyricIndex = 0;
+            nextBeatIndex = 0;
+            currentTargetWord = "";
+            currentPlayerInput = "";
+            targetStartTime = null;
+            
+            // Reset stats
+            targetsHit = 0;
+            totalTargets = 0;
+            correctInputs = 0;
+            totalInputs = 0;
+            incorrectInputs = 0;
+            document.getElementById('targets-hit').textContent = "0";
+            document.getElementById('accuracy').textContent = "0%";
+            document.getElementById('character-score').textContent = "0";
+            document.getElementById('character-level').textContent = "1";
+            
+            // Update track (which starts playback)
+            updateTrack();
+            
+            // Resume game
+            gameStarted = true;
+        });
+        
+        document.getElementById('quitButton').addEventListener('click', () => {
+            // Hide pause menu
+            document.getElementById('pauseMenu').style.display = 'none';
+            
+            // Show main menu
+            document.getElementById('mainMenu').style.display = 'flex';
+            
+            // Hide get ready message
+            document.getElementById('get-ready-message').style.display = 'none';
+            
+            // Pause and reset audio
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            
+            // Restart the main menu music
+            startMusic();
+            audioElement.play().catch(error => console.error("Audio play error:", error));
+            
+            // Reset game variables
+            currentLyricIndex = 0;
+            nextLyricIndex = 0;
+            nextBeatIndex = 0;
+            currentTargetWord = "";
+            currentPlayerInput = "";
+            targetStartTime = null;
+            currentLevel = 0;
+            
+            // Reset stats
+            targetsHit = 0;
+            totalTargets = 0;
+            correctInputs = 0;
+            totalInputs = 0;
+            incorrectInputs = 0;
+            document.getElementById('targets-hit').textContent = "0";
+            document.getElementById('accuracy').textContent = "0%";
+            document.getElementById('character-score').textContent = "0";
+            document.getElementById('character-level').textContent = "1";
+            
+            // Clear displays
+            document.getElementById('target').textContent = "";
+            document.getElementById('input').textContent = "";
+            
+            // Set game as not started
+            gameStarted = false;
+        });
+        
+        // Start animation loop
+        animate();
+        
+        // Initialize game stats
+        document.getElementById('character-level').textContent = "1";
+        document.getElementById('character-speed').textContent = "Normal";
+        document.getElementById('character-score').textContent = "0";
+        document.getElementById('current-track').textContent = "None";
+        document.getElementById('accuracy').textContent = "0%";
+        document.getElementById('targets-hit').textContent = "0";
+        
+        // Event Listeners
+        document.addEventListener('keydown', (event) => {
+            if (gameStarted) {
+                if (event.key === 'Escape') {
+                    // Toggle pause menu
+                    const pauseMenu = document.getElementById('pauseMenu');
+                    if (pauseMenu.style.display === 'block') {
+                        pauseMenu.style.display = 'none';
+                        audioElement.play();
+                    } else {
+                        pauseMenu.style.display = 'block';
+                        audioElement.pause();
+                    }
+                } else if (/^[a-zA-Z ]$/.test(event.key)) {
+                    // Process alphabetic keys and space for typing
+                    if (currentTargetWord) {
+                        let key = event.key;
+                        if (key === ' ') {
+                            key = ' '; // Keep space as space
+                        } else {
+                            key = key.toUpperCase(); // Convert letters to uppercase
+                        }
+                        
+                        // Track total inputs for accuracy calculation
+                        totalInputs++;
+                        
+                        // Add the key to player input
+                        currentPlayerInput += key;
+                        document.getElementById('input').textContent = currentPlayerInput;
+                        
+                        // Check if input matches target
+                        if (currentTargetWord.startsWith(currentPlayerInput)) {
+                            // Correct input
+                            correctInputs++;
+                            
+                            // If complete match, mark as correct
+                            if (currentPlayerInput === currentTargetWord) {
+                                console.log("Target completed correctly!");
+                                
+                                // Increment targets hit
+                                targetsHit++;
+                                totalTargets++;
+                                document.getElementById('targets-hit').textContent = targetsHit;
+                                
+                                // Update accuracy
+                                const accuracy = Math.round((correctInputs / (correctInputs + incorrectInputs)) * 100);
+                                document.getElementById('accuracy').textContent = accuracy + "%";
+                                
+                                // Update character score
+                                const currentScore = parseInt(document.getElementById('character-score').textContent);
+                                document.getElementById('character-score').textContent = currentScore + 100;
+                                
+                                // Immediately reset target tracking to prevent the "Failed" message
+                                // Save the current target for the success message
+                                const completedTarget = currentTargetWord;
+                                
+                                // Reset target variables so timer check won't trigger failure
+                                targetStartTime = null;
+                                currentTargetWord = "";
+                                
+                                // Show success feedback
+                                document.getElementById('input').style.color = "#00ff00";
+                                showLyricIndicator("Success: " + completedTarget, true);
+                                
+                                // Clear the target display to indicate completion after a short delay
+                                setTimeout(() => {
+                                    // Clear target and input displays
+                                    document.getElementById('target').textContent = "";
+                                    document.getElementById('input').textContent = "";
+                                    document.getElementById('input').style.color = "white";
+                                    
+                                    // Current player input already cleared
+                                    currentPlayerInput = "";
+                                }, 500);
+                            }
+                        } else {
+                            // Wrong input - show error but don't reset input
+                            console.log("Incorrect input!");
+                            document.getElementById('input').style.color = "#ff0000";
+                            document.getElementById('overlay').classList.add('shake');
+                            
+                            // Increment incorrect inputs counter
+                            incorrectInputs++;
+                            
+                            // Remove only the last character that was incorrect
+                            currentPlayerInput = currentPlayerInput.slice(0, -1);
+                            document.getElementById('input').textContent = currentPlayerInput;
+                            
+                            // Update accuracy
+                            const accuracy = Math.round((correctInputs / (correctInputs + incorrectInputs)) * 100);
+                            document.getElementById('accuracy').textContent = accuracy + "%";
+                            
+                            // Reset visual feedback after a short delay
+                            setTimeout(() => {
+                                document.getElementById('input').style.color = "white";
+                                document.getElementById('overlay').classList.remove('shake');
+                            }, 500);
+                        }
+                    }
+                } else if (event.key === 'Backspace') {
+                    // Allow backspace to erase input
+                    currentPlayerInput = currentPlayerInput.slice(0, -1);
+                    document.getElementById('input').textContent = currentPlayerInput;
+                    document.getElementById('input').style.color = "white";
+                }
+            }
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Call startMusic when the page loads to prepare the audio source
+        document.addEventListener('DOMContentLoaded', function() {
+            startMusic();
+            
+            // Set up the enter game button
+            document.getElementById('enterGameButton').addEventListener('click', function() {
+                // Hide splash overlay
+                document.getElementById('splashOverlay').style.display = 'none';
+                
+                // Show main menu
+                document.getElementById('mainMenu').style.display = 'flex';
+                
+                // Play the audio after user interaction
+                audioElement.play().catch(error => console.error("Audio play error:", error));
+            });
+        });
+    </script>
+</body>
+</html>

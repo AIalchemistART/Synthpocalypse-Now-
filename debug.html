@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SynthBoarders Debug</title>
+</head>
+<body>
+    <h1>Debug Page</h1>
+    <p>Open the console (F12) to see if there are any errors.</p>
+    
+    <script>
+        // Simple test to check if JavaScript is running
+        console.log("Debug script is running!");
+        
+        // Test the regex that might be causing issues
+        const testKeys = ['a', 'Z', '1', '.', ' ', 'Enter', 'Backspace'];
+        testKeys.forEach(key => {
+            console.log(`Key: ${key}, Matches regex: ${/^[a-zA-Z]$/.test(key)}`);
+        });
+    </script>
+</body>
+</html>
