@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SynthBoarders - Rhythm Typing Game</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Creepster&display=swap" rel="stylesheet">
+    <script src="enemy_movement.js"></script>
+    <script src="enemy_damage.js"></script>
+    <script src="muzzle_flash.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         
@@ -382,7 +385,7 @@
         /* Add vignette effect for failure */
         @keyframes red-vignette {
             0% { opacity: 0; }
-            20% { opacity: 0.7; }
+            20% { opacity: 0.9; } 
             100% { opacity: 0; }
         }
         
@@ -394,9 +397,10 @@
             height: 100%;
             pointer-events: none;
             z-index: 9999;
-            background: radial-gradient(circle, transparent 30%, rgba(255, 0, 0, 0.8) 100%);
+            background: radial-gradient(circle, transparent 30%, rgba(255, 30, 30, 0.98) 100%); 
             opacity: 0;
-            display: none;
+            display: block;
+            transition: opacity 0.1s ease;
         }
         
         .red-vignette {
@@ -433,6 +437,22 @@
     
     <!-- Audio element for background music -->
     <audio id="audioElement" preload="auto"></audio>
+    
+    <!-- Game container -->
+    <div id="container"></div>
+    
+    <!-- UI overlay container for game UI elements -->
+    <div id="ui-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1000;">
+        <!-- Enemy health bar (placed directly in HTML) -->
+        <div id="static-enemy-health-container" style="position: fixed !important; top: 235px !important; right: 20px !important; width: 250px; z-index: 9999 !important; pointer-events: none; opacity: 0; transition: opacity 0.5s ease-in-out;">
+            <div style="color: #fff; font-family: 'Orbitron', sans-serif; font-size: 14px; text-shadow: 0 0 5px rgba(0, 255, 255, 0.8); margin-bottom: 5px; text-align: right;">
+                ENEMY: <span id="static-enemy-health-value">1000</span> / 1000
+            </div>
+            <div style="width: 250px; height: 20px; background-color: rgba(51, 51, 51, 0.8); border: 2px solid #00ffff; border-radius: 4px; box-shadow: 0 0 10px rgba(0, 255, 255, 0.5); overflow: hidden;">
+                <div id="static-enemy-health-fill" style="width: 100%; height: 100%; background-color: #ff3333; transition: width 0.3s ease-out;"></div>
+            </div>
+        </div>
+    </div>
     
     <!-- Game Info Overlay -->
     <div id="trackInfo">
@@ -550,7 +570,7 @@
             "WHOLE ORDEAL",
             "ARMORS SHEEN",
             "ONCE HAD SEEMED",
-            "CONVICTION REAINED",
+            "CONVICTION REIGNED",
             "HAS BEEN STAINED",
             "FOREBODING SOUND",
             "MY FEARS ABOUND",
@@ -602,7 +622,7 @@
 
 [01:40.39]FIRST CRACKS IN THE ARMOR'S SHEEN,
 [01:44.58]NOT ALL IS AS IT ONCE HAD SEEMED,
-[01:49.38]SEEDS OF DOUBT, WHERE CONVICTION REAINED,
+[01:49.38]SEEDS OF DOUBT, WHERE CONVICTION REIGNED,
 [01:53.90]BY THE BLOOD OF COUNTLESS, FAITH HAS BEEN STAINED.
 
 [02:28.64]FIRST CRACKS, A FOREBODING SOUND,
@@ -644,7 +664,9 @@
         let nextLyricIndex = 0;
         
         // Game state tracking
-        let gameStarted = false;
+        let gameStarted = false;    // Whether the game has been started (vs menu)
+        let inGame = false;         // Whether we're in the gameplay section
+        let gameplayActive = false; // Whether active gameplay mechanics should run
         let currentTargetWord = "";
         let currentPlayerInput = "";
         let currentLyricIndex = -1;
@@ -652,6 +674,9 @@
         let currentTimeWindow = 4; // Variable time window that adapts to lyrics
         let targetStartTime = null;
         let justCompletedTarget = false; // Flag to track if we just completed a target
+        let inGetReadyPhase = false; // Whether we're in the "Get Ready" phase
+        let firstLyricsPlayed = false; // Whether the first lyrics have been played
+        let earlyBulletStopTime = 0; // Time when bullets should stop spawning (3 seconds before next lyric)
         
         // Initialize Three.js scene
         const scene = new THREE.Scene();
@@ -698,60 +723,564 @@
         createMountain(150, 120, -380);
         createMountain(250, 90, -420);
         
-        // Add a 3D character model in the left section
-        const characterGeometry = new THREE.BoxGeometry(5, 10, 5);
-        const characterMaterial = new THREE.MeshBasicMaterial({ 
+        // Create a texture loader for loading sprite images
+        const textureLoader = new THREE.TextureLoader();
+        
+        // Create a CHARACTER using colored THREE.js geometry with multiple parts
+        // This will be more visible and better match the synthwave aesthetic
+        let character = new THREE.Group(); // Create a group to hold character parts
+        
+        // Body
+        const bodyGeometry = new THREE.BoxGeometry(5, 8, 2);
+        const bodyMaterial = new THREE.MeshBasicMaterial({ 
             color: 0xff00ff, // Neon magenta
-            wireframe: true
+            wireframe: false
         });
-        const character = new THREE.Mesh(characterGeometry, characterMaterial);
-        character.position.set(-30, 6, 0); // Position on the left third of screen
-        scene.add(character);
-        let characterAnimTime = 0;
-        
-        // Create character details (arms, legs)
-        // Arms
-        const armGeometry = new THREE.BoxGeometry(2, 6, 2);
-        const leftArm = new THREE.Mesh(armGeometry, characterMaterial);
-        leftArm.position.set(-4, 0, 0);
-        character.add(leftArm);
-        
-        const rightArm = new THREE.Mesh(armGeometry, characterMaterial);
-        rightArm.position.set(4, 0, 0);
-        character.add(rightArm);
-        
-        // Legs
-        const legGeometry = new THREE.BoxGeometry(2, 6, 2);
-        const leftLeg = new THREE.Mesh(legGeometry, characterMaterial);
-        leftLeg.position.set(-2, -8, 0);
-        character.add(leftLeg);
-        
-        const rightLeg = new THREE.Mesh(legGeometry, characterMaterial);
-        rightLeg.position.set(2, -8, 0);
-        character.add(rightLeg);
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 2; // Move up to make room for legs
+        body.rotation.z = -0.05; // Slight tilt to look more dynamic
+        character.add(body);
         
         // Head
-        const headGeometry = new THREE.BoxGeometry(4, 4, 4);
+        const headGeometry = new THREE.BoxGeometry(4, 4, 2);
         const headMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xff00ff, // Same as body
-            wireframe: true
+            color: 0xff00ff, // Neon magenta
+            wireframe: false
         });
         const head = new THREE.Mesh(headGeometry, headMaterial);
-        head.position.set(0, 7, 0);
+        head.position.y = 8; // Position at top of body
+        head.rotation.z = 0.1; // Slight head tilt to look more dynamic
         character.add(head);
         
-        // Add a simple 3D enemy avatar in the right section
-        const enemyGeometry = new THREE.SphereGeometry(5, 32, 32);
-        const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Neon cyan
-        const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
-        enemy.position.set(30, 6, 0); // Position in the right third of screen
+        // Visor - make this a contrasting color and facing the enemy (to the right)
+        const visorGeometry = new THREE.BoxGeometry(2.1, 1, 3); // Oriented to face right
+        const visorMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ffff, // Cyan
+            wireframe: false
+        });
+        const visor = new THREE.Mesh(visorGeometry, visorMaterial);
+        visor.position.y = 8; // Center of head
+        visor.position.x = 1.5; // Placed on right side of head when facing right (toward negative X)
+        character.add(visor);
+        
+        // Arms
+        const upperArmGeometry = new THREE.BoxGeometry(1.5, 4, 1.5);
+        const lowerArmGeometry = new THREE.BoxGeometry(1.5, 4, 1.5);
+        const armMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff00ff, // Neon magenta
+            wireframe: false
+        });
+        
+        // Left arm (upper)
+        const leftUpperArm = new THREE.Mesh(upperArmGeometry, armMaterial);
+        leftUpperArm.position.x = -3.5; // Left of body
+        leftUpperArm.position.y = 3.5; // Shoulder height
+        leftUpperArm.rotation.z = -0.3; // Slight downward angle
+        character.add(leftUpperArm);
+        
+        // Left arm (lower) - positioned to hold front of gun
+        const leftLowerArm = new THREE.Mesh(lowerArmGeometry, armMaterial);
+        leftLowerArm.position.x = -1.5; // Moved toward center
+        leftLowerArm.position.y = 2; // Position to hold gun
+        leftLowerArm.position.z = 1; // Forward
+        leftLowerArm.rotation.z = 0.1; // Adjusted angle
+        leftLowerArm.rotation.y = -0.4; // Rotated inward 
+        character.add(leftLowerArm);
+        
+        // Left hand - positioned to hold front of gun
+        const leftHandGeometry = new THREE.BoxGeometry(1, 1.5, 1.5);
+        const leftHandMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff00ff, // Neon magenta
+            wireframe: false
+        });
+        const leftHand = new THREE.Mesh(leftHandGeometry, leftHandMaterial);
+        leftHand.position.x = 0; // Center (holding front of gun)
+        leftHand.position.y = 2; // Aligned with weapon
+        leftHand.position.z = 1.8; // Forward of body
+        leftHand.rotation.y = -0.3; // Angled to grip weapon
+        character.add(leftHand);
+        
+        // Right arm (upper) - in shooting position
+        const rightUpperArm = new THREE.Mesh(upperArmGeometry, armMaterial);
+        rightUpperArm.position.x = 3.5; // Right of body
+        rightUpperArm.position.y = 3.5; // Shoulder height
+        rightUpperArm.position.z = 0.5; // Slightly forward
+        rightUpperArm.rotation.z = 0.2; // Raised slightly
+        character.add(rightUpperArm);
+        
+        // Right arm (lower) - extended holding weapon
+        const rightLowerArm = new THREE.Mesh(lowerArmGeometry, armMaterial);
+        rightLowerArm.position.x = 4.5; // Closer to center
+        rightLowerArm.position.y = 2.5; // Lower 
+        rightLowerArm.position.z = 1; // More forward
+        rightLowerArm.rotation.z = -0.1; // Slightly angled to hold weapon
+        rightLowerArm.rotation.y = 0.4; // Rotated inward toward body
+        character.add(rightLowerArm);
+        
+        // Hand
+        const handGeometry = new THREE.BoxGeometry(1, 1.5, 1.5);
+        const handMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff00ff, // Neon magenta
+            wireframe: false
+        });
+        const hand = new THREE.Mesh(handGeometry, handMaterial);
+        hand.position.x = 3; // Moved toward center of body
+        hand.position.y = 2; // Aligned with arm
+        hand.position.z = 1.5; // Forward
+        hand.rotation.y = 0.3; // Angled to hold weapon
+        character.add(hand);
+        
+        // Main weapon body
+        const weaponBodyGeometry = new THREE.BoxGeometry(5, 1.2, 1.5);
+        const weaponMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x555555, // Gray
+            wireframe: false
+        });
+        const weaponBody = new THREE.Mesh(weaponBodyGeometry, weaponMaterial);
+        weaponBody.position.x = 3; // Positioned across the chest
+        weaponBody.position.y = 2; // Center height
+        weaponBody.position.z = 2; // In front of the body
+        weaponBody.rotation.y = 0.3; // Angled slightly
+        character.add(weaponBody);
+        
+        // Weapon grip (where hand holds)
+        const weaponGripGeometry = new THREE.BoxGeometry(1, 2, 1);
+        const weaponGripMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x333333, // Darker gray
+            wireframe: false
+        });
+        const weaponGrip = new THREE.Mesh(weaponGripGeometry, weaponGripMaterial);
+        weaponGrip.position.x = 3; // At the hand
+        weaponGrip.position.y = 1; // Below main body
+        weaponGrip.position.z = 2; // In front of body
+        weaponGrip.rotation.y = 0.3; // Angled same as body
+        character.add(weaponGrip);
+        
+        // Weapon top rail
+        const weaponTopGeometry = new THREE.BoxGeometry(4, 0.5, 1);
+        const weaponTopMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x222222, // Very dark gray
+            wireframe: false
+        });
+        const weaponTop = new THREE.Mesh(weaponTopGeometry, weaponTopMaterial);
+        weaponTop.position.x = 3; // Align with main body
+        weaponTop.position.y = 2.5; // Top of weapon
+        weaponTop.position.z = 2; // In front of body
+        weaponTop.rotation.y = 0.3; // Angled same as body
+        character.add(weaponTop);
+        
+        // Weapon barrel
+        const weaponBarrelGeometry = new THREE.BoxGeometry(3, 0.8, 0.8);
+        const weaponBarrelMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x333333, // Darker gray
+            wireframe: false
+        });
+        const weaponBarrel = new THREE.Mesh(weaponBarrelGeometry, weaponBarrelMaterial);
+        weaponBarrel.position.x = 5.5; // Extending right from body
+        weaponBarrel.position.y = 2; // Aligned with body
+        weaponBarrel.position.z = 2; // In front of body
+        weaponBarrel.rotation.y = 0.3; // Angled same as body
+        character.add(weaponBarrel);
+        
+        // Weapon energy core (glowing part)
+        const weaponCoreGeometry = new THREE.SphereGeometry(1, 8, 8);
+        const weaponCoreMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ffff, // Cyan
+            wireframe: false
+        });
+        const weaponCore = new THREE.Mesh(weaponCoreGeometry, weaponCoreMaterial);
+        weaponCore.position.x = 3; // Middle of gun
+        weaponCore.position.y = 1.6; // Bottom of main body
+        weaponCore.position.z = 2.1; // Slightly forward from gun body
+        weaponCore.rotation.y = 0.3; // Angled same as body
+        character.add(weaponCore);
+        
+        // Weapon energy glow (muzzle)
+        const weaponGlowGeometry = new THREE.BoxGeometry(0.6, 0.6, 1.2);
+        const weaponGlowMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ffff, // Cyan
+            wireframe: false
+        });
+        const weaponGlow = new THREE.Mesh(weaponGlowGeometry, weaponGlowMaterial);
+        weaponGlow.position.x = 7; // End of barrel
+        weaponGlow.position.y = 2; // Align with barrel
+        weaponGlow.position.z = 2; // In front of body
+        weaponGlow.rotation.y = 0.3; // Angled same as body
+        character.add(weaponGlow);
+        
+        // Store weapon glow reference for muzzle flash effects
+        character.weaponGlow = weaponGlow;
+        
+        // Initialize the muzzle flash system
+        if (window.MuzzleFlash && typeof window.MuzzleFlash.init === 'function') {
+            window.MuzzleFlash.init(scene, weaponGlow);
+        }
+        
+        // Legs
+        const upperLegGeometry = new THREE.BoxGeometry(2, 4, 2);
+        const legMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff00ff, // Neon magenta
+            wireframe: false
+        });
+        
+        // Left leg (upper)
+        const leftUpperLeg = new THREE.Mesh(upperLegGeometry, legMaterial);
+        leftUpperLeg.position.x = -1.5; // Left side
+        leftUpperLeg.position.y = -3; // Below body
+        leftUpperLeg.rotation.z = 0.05; // Slight angle
+        character.add(leftUpperLeg);
+        
+        // Left leg (lower)
+        const lowerLegGeometry = new THREE.BoxGeometry(2, 4, 2);
+        const leftLowerLeg = new THREE.Mesh(lowerLegGeometry, legMaterial);
+        leftLowerLeg.position.x = -1.5; // Left side
+        leftLowerLeg.position.y = -6.5; // Below upper leg
+        character.add(leftLowerLeg);
+        
+        // Right leg (upper) - when facing negative X
+        const rightUpperLeg = new THREE.Mesh(upperLegGeometry, legMaterial);
+        rightUpperLeg.position.x = 1.5; // Right side
+        rightUpperLeg.position.y = -3; // Below body
+        rightUpperLeg.rotation.z = -0.1; // Slight angle outward
+        character.add(rightUpperLeg);
+        
+        // Right leg (lower)
+        const rightLowerLeg = new THREE.Mesh(lowerLegGeometry, legMaterial);
+        rightLowerLeg.position.x = 1.7; // Right side
+        rightLowerLeg.position.y = -6.5; // Below upper leg
+        character.add(rightLowerLeg);
+        
+        // Position the character
+        character.position.set(-250, 2, 0); // Far left off-screen initially
+        
+        // Add a collision sphere for more accurate hit detection
+        character.collisionRadius = 6; // Adjust based on character size
+        
+        // Character movement variables
+        const characterMovement = {
+            moveSpeed: 0.8,        // Base movement speed
+            jumpSpeed: 1.2,        // Jump velocity
+            gravity: 0.1,          // Gravity force
+            yVelocity: 0,          // Current vertical velocity
+            isJumping: false,      // Whether character is currently jumping
+            isCrouching: false,    // Whether character is currently crouching
+            keys: {                // Keyboard state tracking
+                left: false,
+                right: false,
+                up: false,
+                down: false
+            },
+            minX: -45,             // Left boundary
+            maxX: -10,             // Right boundary
+            baseY: 2,              // Default y position (standing)
+            crouchY: 0,            // Y position when crouching
+            maxY: 10,              // Maximum jump height
+            minY: -4               // Minimum position (for platform feel)
+        };
+        
+        scene.add(character);
+        console.log("Enhanced character created with improved weapon and posing");
+        
+        let characterAnimTime = 0;
+        
+        // Create an ENEMY model using similar structure but different aesthetics
+        let enemy = new THREE.Group(); // Create a group to hold enemy parts
+        
+        // Enemy Body - wider, more threatening
+        const enemyBodyGeometry = new THREE.BoxGeometry(6, 7, 2);
+        const enemyMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff3300, // Bright orange-red
+            wireframe: false
+        });
+        const enemyBody = new THREE.Mesh(enemyBodyGeometry, enemyMaterial);
+        enemyBody.position.y = 2; 
+        enemyBody.rotation.z = -0.05; // Slight tilt mirrored from player
+        enemy.add(enemyBody);
+        
+        // Enemy Head - angular and menacing
+        const enemyHeadGeometry = new THREE.BoxGeometry(5, 3, 2.5);
+        const enemyHeadMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff3300, // Bright orange-red
+            wireframe: false
+        });
+        const enemyHead = new THREE.Mesh(enemyHeadGeometry, enemyHeadMaterial);
+        enemyHead.position.y = 7; // Position at top of body
+        enemy.add(enemyHead);
+        
+        // Enemy Visor - make this more aggressive looking
+        const enemyVisorGeometry = new THREE.BoxGeometry(4, 0.8, 3); // Wider, more menacing
+        const enemyVisorMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff0000, // Bright red
+            wireframe: false
+        });
+        const enemyVisor = new THREE.Mesh(enemyVisorGeometry, enemyVisorMaterial);
+        enemyVisor.position.y = 7; // Center of head
+        enemyVisor.position.x = -1.5; // Left side of head when facing right (toward negative X)
+        enemy.add(enemyVisor);
+        
+        // Enemy Arms
+        const enemyUpperArmGeometry = new THREE.BoxGeometry(2, 4, 2);
+        const enemyArmMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff3300, // Bright orange-red
+            wireframe: false
+        });
+        
+        // Right arm (upper) - this is on the right side when facing toward negative X
+        const enemyRightUpperArm = new THREE.Mesh(enemyUpperArmGeometry, enemyArmMaterial);
+        enemyRightUpperArm.position.x = -4; // Right of body
+        enemyRightUpperArm.position.y = 3.5; // Shoulder height
+        enemyRightUpperArm.rotation.z = -0.7; // Angled to hold weapon
+        enemy.add(enemyRightUpperArm);
+        
+        // Right arm (lower)
+        const enemyLowerArmGeometry = new THREE.BoxGeometry(2, 4, 2);
+        const enemyRightLowerArm = new THREE.Mesh(enemyLowerArmGeometry, enemyArmMaterial);
+        enemyRightLowerArm.position.x = -5; // Further right and forward
+        enemyRightLowerArm.position.y = 2; // Position to hold weapon
+        enemyRightLowerArm.rotation.z = 0.3; // Bent at elbow to hold gun
+        enemy.add(enemyRightLowerArm);
+        
+        // Left arm (upper) - this is on the left side when facing toward negative X
+        const enemyLeftUpperArm = new THREE.Mesh(enemyUpperArmGeometry, enemyArmMaterial);
+        enemyLeftUpperArm.position.x = 3; // Left of body
+        enemyLeftUpperArm.position.y = 3.5; // Shoulder height
+        enemyLeftUpperArm.rotation.z = 0.6; // Angled out to hold weapon
+        enemy.add(enemyLeftUpperArm);
+        
+        // Left arm (lower)
+        const enemyLeftLowerArm = new THREE.Mesh(enemyLowerArmGeometry, enemyArmMaterial);
+        enemyLeftLowerArm.position.x = 3; // Positioned to support weapon
+        enemyLeftLowerArm.position.y = 1.5; // Lower to reach across body
+        enemyLeftLowerArm.rotation.z = -0.8; // Angled to support gun from below
+        enemy.add(enemyLeftLowerArm);
+        
+        // Legs
+        const enemyUpperLegGeometry = new THREE.BoxGeometry(2.5, 4, 2.5);
+        const enemyLegMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff3300, // Bright orange-red
+            wireframe: false
+        });
+        
+        // Right leg (upper) - when facing negative X
+        const enemyRightUpperLeg = new THREE.Mesh(enemyUpperLegGeometry, enemyLegMaterial);
+        enemyRightUpperLeg.position.x = -2; // Right side
+        enemyRightUpperLeg.position.y = -3; // Below body
+        enemy.add(enemyRightUpperLeg);
+        
+        // Right leg (lower)
+        const enemyLowerLegGeometry = new THREE.BoxGeometry(2.5, 4, 2.5);
+        const enemyRightLowerLeg = new THREE.Mesh(enemyLowerLegGeometry, enemyLegMaterial);
+        enemyRightLowerLeg.position.x = -2; // Right side
+        enemyRightLowerLeg.position.y = -6.5; // Below upper leg
+        enemy.add(enemyRightLowerLeg);
+        
+        // Left leg (upper) - when facing negative X
+        const enemyLeftUpperLeg = new THREE.Mesh(enemyUpperLegGeometry, enemyLegMaterial);
+        enemyLeftUpperLeg.position.x = 2; // Left side
+        enemyLeftUpperLeg.position.y = -3; // Below body
+        enemy.add(enemyLeftUpperLeg);
+        
+        // Left leg (lower)
+        const enemyLeftLowerLeg = new THREE.Mesh(enemyLowerLegGeometry, enemyLegMaterial);
+        enemyLeftLowerLeg.position.x = 2; // Left side
+        enemyLeftLowerLeg.position.y = -6.5; // Below upper leg
+        enemy.add(enemyLeftLowerLeg);
+        
+        // Enemy weapon - laser cannon with contrasting color, positioned across body
+        // Create a group for the weapon to add more details
+        const enemyWeaponGroup = new THREE.Group();
+        
+        // Main weapon body
+        const enemyWeaponGeometry = new THREE.BoxGeometry(8, 2, 2);
+        const enemyWeaponMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ccff, // Bright cyan/blue for contrast with orange-red body
+            wireframe: false
+        });
+        const enemyWeapon = new THREE.Mesh(enemyWeaponGeometry, enemyWeaponMaterial);
+        enemyWeapon.position.x = 0; // Center of group
+        enemyWeapon.position.y = 0; // Center of group
+        enemyWeaponGroup.add(enemyWeapon);
+        
+        // Weapon barrel
+        const enemyBarrelGeometry = new THREE.CylinderGeometry(0.6, 0.8, 4, 8);
+        const enemyBarrelMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x0088cc, // Darker blue for barrel
+            wireframe: false
+        });
+        const enemyBarrel = new THREE.Mesh(enemyBarrelGeometry, enemyBarrelMaterial);
+        enemyBarrel.rotation.z = Math.PI / 2; // Rotate to point forward
+        enemyBarrel.position.x = -6; // Extend from main weapon body
+        enemyWeaponGroup.add(enemyBarrel);
+        
+        // Weapon sights
+        const enemySightGeometry = new THREE.BoxGeometry(1, 0.8, 0.5);
+        const enemySightMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x005588, // Darker blue
+            wireframe: false
+        });
+        const enemySight = new THREE.Mesh(enemySightGeometry, enemySightMaterial);
+        enemySight.position.y = 1; // Top of weapon
+        enemySight.position.x = -1; // Near back of weapon
+        enemyWeaponGroup.add(enemySight);
+        
+        // Weapon handle
+        const enemyHandleGeometry = new THREE.BoxGeometry(0.8, 2, 0.8);
+        const enemyHandleMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x004466, // Even darker blue
+            wireframe: false
+        });
+        const enemyHandle = new THREE.Mesh(enemyHandleGeometry, enemyHandleMaterial);
+        enemyHandle.position.y = -1.5; // Bottom of weapon
+        enemyHandle.position.x = 1.5; // Back half of weapon
+        enemyWeaponGroup.add(enemyHandle);
+        
+        // Weapon core - glowing part with contrasting color
+        const enemyCoreGeometry = new THREE.SphereGeometry(1, 8, 8);
+        const enemyCoreMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ffff, // Brighter cyan
+            wireframe: false
+        });
+        const enemyCore = new THREE.Mesh(enemyCoreGeometry, enemyCoreMaterial);
+        enemyCore.position.x = -7; // End of barrel
+        enemyCore.position.y = 0; // Center of barrel
+        enemyWeaponGroup.add(enemyCore);
+        
+        // Position the entire weapon group
+        enemyWeaponGroup.position.x = -2; // Position so it overlaps across the body
+        enemyWeaponGroup.position.y = 3; // Move up to clear the body
+        enemyWeaponGroup.position.z = 1.5; // Bring forward to be over the body
+        enemyWeaponGroup.rotation.y = -Math.PI / 6; // Angle it slightly
+        
+        enemy.add(enemyWeaponGroup);
+        
+        // Adjust right arm to hold weapon higher
+        enemyRightLowerArm.position.y = 3; // Higher to match weapon
+        
+        // Adjust left arm to hold weapon higher
+        enemyLeftLowerArm.position.y = 2.5; // Higher to match weapon
+        
+        // Position the enemy
+        enemy.position.set(250, 2, 0); // Far right off-screen initially
+        enemy.rotation.y = 0; // No rotation needed as we've constructed it to face left
+        
+        // Add a collision sphere for hit detection
+        enemy.collisionRadius = 7; // Slightly larger than player
+        
         scene.add(enemy);
-        let enemyAnimTime = 0;
+        console.log("Enemy created with menacing appearance");
+        
+        let enemyAnimTime = 0; // Animation time counter for enemy
         
         // Position camera
         camera.position.y = 10;
         camera.position.z = 50;
         camera.lookAt(0, 0, 0);
+        
+        // Bullet hell variables
+        let bullets = [];
+        let lastBulletTime = 0; // For periodic bullet spawning
+        
+        // Bullet class for bullet hell mechanics
+        class Bullet {
+            constructor(x, y, z) {
+                // Add debug stack trace to see where bullets are being created from
+                console.log("Bullet created at position: X:" + x + ", Y:" + y + ", Z:" + z);
+                console.log("inGetReadyPhase:", inGetReadyPhase, "firstLyricsPlayed:", firstLyricsPlayed);
+                console.trace("Bullet creation stack trace");
+                
+                this.geometry = new THREE.SphereGeometry(1.0, 16, 16); // Reduced from 3.0 to 1.0
+                this.material = new THREE.MeshPhongMaterial({ 
+                    color: 0xff0000,
+                    emissive: 0xff0000,
+                    emissiveIntensity: 0.5,
+                    specular: 0xffffff,
+                    shininess: 30
+                });
+                this.mesh = new THREE.Mesh(this.geometry, this.material);
+                this.mesh.position.set(x, y, z);
+                
+                // Create a custom trail geometry for a graceful taper from bullet to point
+                // Use three segments to create a more shaped trail that tapers gracefully 
+                const trailLength = 6;
+                const trailSegments = 16;
+                const radiusTop = 0.9;     // Slightly wider at bullet connection point
+                const radiusBottom = 0.2;  // More pointed at the far end
+                
+                const trailGeometry = new THREE.CylinderGeometry(
+                    radiusTop, radiusBottom, trailLength, trailSegments
+                );
+                
+                // Create a custom displacement for vertices to make a more curved taper
+                const positionAttribute = trailGeometry.getAttribute('position');
+                for (let i = 0; i < positionAttribute.count; i++) {
+                    const y = positionAttribute.getY(i);
+                    
+                    // Only modify non-cap vertices (exclude the very top and bottom caps)
+                    if (y !== trailLength/2 && y !== -trailLength/2) {
+                        // Get normalized position along trail (0 at bullet end, 1 at far end)
+                        const normalizedPos = (trailLength/2 - y) / trailLength;
+                        
+                        // Create a curved taper using exponential falloff
+                        // This makes it taper more quickly near the bullet
+                        const taperedScale = Math.pow(1 - normalizedPos, 1.5);
+                        
+                        // Scale x and z coordinates to create the custom taper
+                        const x = positionAttribute.getX(i);
+                        const z = positionAttribute.getZ(i);
+                        positionAttribute.setX(i, x * taperedScale);
+                        positionAttribute.setZ(i, z * taperedScale);
+                    }
+                }
+                
+                // Update normals after modification
+                trailGeometry.computeVertexNormals();
+                
+                this.trailMesh = new THREE.Mesh(
+                    trailGeometry,
+                    new THREE.MeshPhongMaterial({ 
+                        color: 0xff5500, 
+                        emissive: 0xff3300,
+                        transparent: true, 
+                        opacity: 0.9,
+                        emissiveIntensity: 0.8
+                    })
+                );
+                this.trailMesh.rotation.x = Math.PI / 2; // Rotate to point along Z-axis
+                scene.add(this.trailMesh);
+                
+                // Add the bullet to the scene - this is crucial!
+                scene.add(this.mesh);
+                
+                console.log(`Bullet created at position: X:${x}, Y:${y}, Z:${z}`);
+            }
+            
+            update() {
+                // Move bullet upward
+                this.mesh.position.z += 0.4; // Doubled from 0.2
+                
+                // Update trail position to follow behind bullet
+                this.trailMesh.position.copy(this.mesh.position);
+                this.trailMesh.position.z -= 3.0; // Adjusted for the new custom trail shape
+            }
+            
+            // Method to clean up properly
+            remove() {
+                scene.remove(this.mesh);
+                scene.remove(this.trailMesh);
+            }
+        }
+        
+        // Add a point light to illuminate bullets better
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+        pointLight.position.set(0, 10, 10);
+        scene.add(pointLight);
+        
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        
+        const verticalLaneX = [-2, 2]; // Left and right lanes for vertical bullets
+        const horizontalLaneY = [0]; // Single lane at eye level for horizontal bullets (first level)
         
         function animate() {
             requestAnimationFrame(animate);
@@ -772,16 +1301,378 @@
             // Animate character
             if (character) {
                 characterAnimTime += 0.03;
-                character.position.y = 6 + Math.sin(characterAnimTime) * 0.5;
+                
+                // Character movement logic
+                // Left/Right movement
+                if (characterMovement.keys.left) {
+                    character.position.x -= characterMovement.moveSpeed;
+                    if (character.position.x < characterMovement.minX) {
+                        character.position.x = characterMovement.minX;
+                    }
+                }
+                if (characterMovement.keys.right) {
+                    character.position.x += characterMovement.moveSpeed;
+                    if (character.position.x > characterMovement.maxX) {
+                        character.position.x = characterMovement.maxX;
+                    }
+                }
+                
+                // Jumping and gravity
+                if (characterMovement.isJumping) {
+                    // Apply velocity to position
+                    character.position.y += characterMovement.yVelocity;
+                    
+                    // Apply gravity to velocity
+                    characterMovement.yVelocity -= characterMovement.gravity;
+                    
+                    // Check if we've landed
+                    if (character.position.y <= characterMovement.baseY) {
+                        character.position.y = characterMovement.baseY;
+                        characterMovement.yVelocity = 0;
+                        characterMovement.isJumping = false;
+                    }
+                    
+                    // Cap the maximum height
+                    if (character.position.y > characterMovement.maxY) {
+                        character.position.y = characterMovement.maxY;
+                        characterMovement.yVelocity = 0; // Start falling
+                    }
+                } else if (characterMovement.isCrouching) {
+                    // Smoothly transition to crouching position
+                    character.position.y = characterMovement.crouchY;
+                    
+                    // Scale the character slightly to appear crouched
+                    character.scale.y = 0.7;
+                } else {
+                    // Return to normal height when not crouching
+                    character.position.y = characterMovement.baseY + Math.sin(characterAnimTime) * 0.3;
+                    character.scale.y = 1.0;
+                }
+                
+                // Rotate slightly for more dynamic appearance
+                character.rotation.z = Math.sin(characterAnimTime * 0.2) * 0.03;
+                
+                // Lean into movement direction slightly
+                if (characterMovement.keys.left) {
+                    character.rotation.z = Math.max(character.rotation.z, 0.1);
+                } else if (characterMovement.keys.right) {
+                    character.rotation.z = Math.min(character.rotation.z, -0.1);
+                }
+                
+                // Make the visor flash between colors
+                if (character.children && character.children.length > 2) {
+                    const visor = character.children[2];
+                    if (visor && visor.material) {
+                        // Flash between cyan and a bright blue
+                        const flash = Math.sin(characterAnimTime * 3) > 0;
+                        visor.material.color.set(flash ? 0x00ffff : 0x00aaff);
+                    }
+                }
+                
+                // Find weapon parts by their properties
+                let weaponCore = null;
+                let weaponGlow = null;
+                
+                // Look through all children for the weapon parts
+                for (let i = 0; i < character.children.length; i++) {
+                    const child = character.children[i];
+                    if (!child || !child.material) continue;
+                    
+                    // Check material color and position to identify parts
+                    if (child.material.color) {
+                        // Cyan colored parts around z=2 (forward position)
+                        const color = child.material.color;
+                        const isCyan = color.g > 0.5 && color.b > 0.5 && color.r < 0.3;
+                        
+                        if (isCyan && child.position.z > 1.5) {
+                            // Smaller one at the end of barrel is the glow
+                            if (child.position.x > 6) {
+                                weaponGlow = child;
+                            }
+                            // One in the middle of the gun is the core
+                            else if (Math.abs(child.position.x - 3) < 1) {
+                                weaponCore = child;
+                            }
+                        }
+                    }
+                }
+                
+                // Animate weapon core
+                if (weaponCore && !character.justReset) {
+                    const pulse = 0.6 + 0.4 * Math.sin(characterAnimTime * 4);
+                    weaponCore.material.color.setRGB(0, pulse, pulse);
+                }
+                
+                // Animate weapon glow
+                if (weaponGlow && !character.justReset) {
+                    const pulse = 0.5 + 0.5 * Math.sin(characterAnimTime * 6);
+                    weaponGlow.material.color.setRGB(0, pulse, pulse);
+                    
+                    const glowPulse = 1 + Math.sin(characterAnimTime * 6) * 0.2;
+                    weaponGlow.scale.set(glowPulse, glowPulse, glowPulse);
+                }
+                
+                // Update muzzle flash animation if it exists
+                if (window.MuzzleFlash && typeof window.MuzzleFlash.update === 'function') {
+                    window.MuzzleFlash.update();
+                }
             }
             
-            // Animate enemy's pulsing effect to make it more threatening
-            enemyAnimTime += 0.05;
-            enemy.scale.set(
-                1 + Math.sin(enemyAnimTime) * 0.1, 
-                1 + Math.sin(enemyAnimTime) * 0.1, 
-                1 + Math.sin(enemyAnimTime) * 0.1
-            );
+            // Animate enemy
+            if (enemy) {
+                enemyAnimTime += 0.03;
+                
+                // Bob the enemy up and down slightly
+                enemy.position.y = 2 + Math.sin(enemyAnimTime * 0.7) * 0.4;
+                
+                // Pulse the enemy core
+                enemy.children.forEach(part => {
+                    if (part.geometry && part.geometry.type === 'SphereGeometry') {
+                        // Pulse color
+                        const pulse = 0.6 + 0.4 * Math.sin(enemyAnimTime * 4);
+                        part.material.color.setRGB(0, pulse * 0.2, 1); // Cyan pulse
+                        
+                        // Pulse size
+                        const scale = 1 + 0.2 * Math.sin(enemyAnimTime * 4);
+                        part.scale.set(scale, scale, scale);
+                    }
+                    
+                    // Make visor flash
+                    if (part === enemyVisor) {
+                        const flash = Math.sin(enemyAnimTime * 2) > 0;
+                        part.material.color.set(flash ? 0xff0000 : 0xdd0000);
+                    }
+                    
+                    // Make weapon parts pulse with different intensities
+                    if (part.geometry && part.geometry.type === 'SphereGeometry') {
+                        const corePulse = 0.6 + 0.4 * Math.sin(enemyAnimTime * 4);
+                        part.material.color.setRGB(0, corePulse, 1); // Cyan pulse
+                        
+                        // Scale the core for a more dynamic effect
+                        const coreScale = 1 + 0.2 * Math.sin(enemyAnimTime * 4);
+                        part.scale.set(coreScale, coreScale, coreScale);
+                    }
+                    
+                    // Make barrel glow more subtly
+                    if (part.geometry && part.geometry.type === 'CylinderGeometry') {
+                        const barrelPulse = 0.4 + 0.2 * Math.sin(enemyAnimTime * 2);
+                        part.material.color.setRGB(0, barrelPulse, 0.8);
+                    }
+                });
+            }
+            
+            // Update enemy movement
+            if (typeof EnemyMovement !== 'undefined') {
+                EnemyMovement.update(enemy, 0.03);
+            }
+            
+            // Test bullet spawn every 1.25 seconds but only during Get Ready phases after first lyrics
+            // AND only if we haven't reached the early stop time (3 seconds before next lyric)
+            if (Date.now() - lastBulletTime > 1250 && gameplayActive && inGetReadyPhase && 
+                firstLyricsPlayed && Date.now() < earlyBulletStopTime) {
+                console.log("AUTO BULLET CHECK: Can fire bullets! inGetReadyPhase:", inGetReadyPhase, 
+                           "firstLyricsPlayed:", firstLyricsPlayed);
+                
+                // For first level, just use horizontal bullets
+                if (currentLevel === 0) {
+                    fireHorizontalLaneBullet();
+                } else {
+                    // For higher levels, use test bullets and other varieties
+                    spawnTestBullet();
+                }
+                
+                lastBulletTime = Date.now();
+                console.log("Bullet fired, total bullets:", bullets.length);
+            } else if (Date.now() - lastBulletTime > 1250 && gameplayActive) {
+                // If we're past earlyBulletStopTime but still in Get Ready phase, log it
+                if (inGetReadyPhase && firstLyricsPlayed && Date.now() >= earlyBulletStopTime) {
+                    console.log("Early bullet stop active - no more bullets until next phase");
+                } else {
+                    console.log("AUTO BULLET CHECK: Cannot fire bullets. inGetReadyPhase:", inGetReadyPhase, 
+                               "firstLyricsPlayed:", firstLyricsPlayed);
+                }
+                lastBulletTime = Date.now(); // Still reset the timer to avoid log spam
+            }
+            
+            // Update all bullets only when gameplay is active
+            if (gameplayActive) {
+                // Update all bullets
+                bullets.forEach(bullet => bullet.update());
+                
+                // Remove bullets that have gone past screen boundaries
+                bullets = bullets.filter(bullet => {
+                    if (bullet.mesh.position.z > 5 || bullet.mesh.position.z < -5) { // Top of screen or behind context window
+                        bullet.remove(); // Use the remove method to clean up both bullet and trail
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // Check for player collision with bullets
+                bullets.forEach(bullet => {
+                    if (!character) return; // Skip if character isn't loaded yet
+                    
+                    let distance = bullet.mesh.position.distanceTo(character.position);
+                    let hitRadius = character.collisionRadius || 3.0; // Use defined radius or default
+                    
+                    if (distance < hitRadius) { // Use character's collision radius
+                        console.log("Player hit by bullet at position:", bullet.mesh.position);
+                        bullet.remove(); // Use the remove method
+                        bullets = bullets.filter(b => b !== bullet);
+                        
+                        // Visual feedback when player is hit
+                        mildShakeScreen(); // Use milder shake effect
+                        const vignette = document.getElementById('vignette-overlay');
+                        vignette.style.opacity = '0.8'; // Increased opacity for better visibility
+                        
+                        // Make character flash red briefly
+                        const flashCharacter = () => {
+                            // Track all materials we modify to restore them later
+                            const originalMaterials = [];
+                            
+                            // Function to apply flash to a material
+                            const applyFlashToMaterial = (material) => {
+                                if (material && material.color) {
+                                    // Store original color to restore later
+                                    const originalColor = material.color.clone();
+                                    originalMaterials.push({ material, originalColor });
+                                    
+                                    // Apply red flash
+                                    material.color.set(0xff0000);
+                                    
+                                    // Also temporarily increase emissive for a glow effect
+                                    if (material.emissive) {
+                                        material.emissive.set(0xff0000);
+                                    }
+                                }
+                            };
+                            
+                            // Function to recursively process a 3D object and its children
+                            const processObject = (obj) => {
+                                // If object has a material property, flash it
+                                if (obj.material) {
+                                    // Handle both single materials and material arrays
+                                    if (Array.isArray(obj.material)) {
+                                        obj.material.forEach(mat => applyFlashToMaterial(mat));
+                                    } else {
+                                        applyFlashToMaterial(obj.material);
+                                    }
+                                }
+                                
+                                // Process children recursively
+                                if (obj.children && obj.children.length > 0) {
+                                    obj.children.forEach(child => processObject(child));
+                                }
+                            };
+                            
+                            // Start processing from the character object
+                            processObject(character);
+                            
+                            // Return a function to restore original colors
+                            return () => {
+                                originalMaterials.forEach(item => {
+                                    try {
+                                        // Restore color with a direct set instead of copy
+                                        const hexColor = item.originalColor.getHex();
+                                        item.material.color.set(hexColor);
+                                        
+                                        // Reset emissive if it was modified
+                                        if (item.material.emissive) {
+                                            item.material.emissive.set(0x000000);
+                                        }
+                                        
+                                        // Force update
+                                        item.material.needsUpdate = true;
+                                    } catch (e) {
+                                        console.error("Error restoring material:", e);
+                                    }
+                                });
+                            };
+                        };
+                        
+                        // Apply flash and schedule restoration
+                        const restoreOriginalMaterials = flashCharacter();
+                        
+                        // Also update the debug display
+                        const debugInfoElement = document.getElementById('debug-info');
+                        if (debugInfoElement) {
+                            debugInfoElement.textContent = "Debug: Player Hit!";
+                            debugInfoElement.style.color = '#ff0000';
+                        }
+                        
+                        // Reset everything after the flash duration
+                        setTimeout(() => {
+                            // Only use our improved reset function directly for all character parts
+                            resetCompleteCharacter(character);
+                            
+                            // Reset vignette
+                            if (vignette) {
+                                vignette.style.opacity = '0';
+                            }
+                            
+                            // Reset debug info
+                            if (debugInfoElement) {
+                                debugInfoElement.textContent = "Debug: Active";
+                                debugInfoElement.style.color = '#00ff00';
+                            }
+                        }, 25);
+                        
+                        // Add character model debugging
+                        console.log("Character structure when hit:", character);
+                        if (character.children) {
+                            console.log("Character has children:", character.children.length);
+                            character.children.forEach((child, index) => {
+                                console.log(`Child ${index}:`, child);
+                                if (child.material) {
+                                    console.log(`Child ${index} material:`, child.material);
+                                }
+                            });
+                        }
+                        
+                        // Add a more subtle recoil animation instead of position change
+                        if (character && bullet.mesh) {
+                            // Get impact direction (from bullet to character)
+                            const impactDirection = new THREE.Vector3();
+                            impactDirection.subVectors(character.position, bullet.mesh.position).normalize();
+                            
+                            // Store the original rotation
+                            const originalRotationX = character.rotation.x;
+                            const originalRotationZ = character.rotation.z;
+                            
+                            // Apply a slight rotation in the direction of impact (lean back)
+                            const rotationStrength = 0.15; // Very subtle
+                            character.rotation.x += impactDirection.y * rotationStrength;
+                            character.rotation.z += impactDirection.x * rotationStrength;
+                            
+                            // Gradually restore original rotation
+                            setTimeout(() => {
+                                character.rotation.x = originalRotationX + (impactDirection.y * rotationStrength * 0.5);
+                                character.rotation.z = originalRotationZ + (impactDirection.x * rotationStrength * 0.5);
+                            }, 50);
+                            
+                            setTimeout(() => {
+                                character.rotation.x = originalRotationX;
+                                character.rotation.z = originalRotationZ;
+                            }, 100);
+                        }
+                    }
+                });
+            }
+            
+            // 10% chance per frame for steady projectile stream (only for levels beyond the first)
+            if (Math.random() < 0.1 && gameplayActive && currentLevel > 0 && inGetReadyPhase && firstLyricsPlayed) {
+                fireEnemyStream();
+            }
+            
+            // 3% chance per frame for vertical lane bullets (only for levels beyond the first)
+            if (Math.random() < 0.03 && gameplayActive && currentLevel > 0 && inGetReadyPhase && firstLyricsPlayed) {
+                fireVerticalLaneBullet();
+            }
+            
+            // 2% chance per frame for horizontal lane bullets (only for levels beyond the first)
+            if (Math.random() < 0.02 && gameplayActive && currentLevel > 0 && inGetReadyPhase && firstLyricsPlayed) {
+                fireHorizontalLaneBullet();
+            }
             
             renderer.render(scene, camera);
             
@@ -910,11 +1801,19 @@
                     console.log('Lyric at time:', currentLyrics[nextLyricIndex].time);
                     console.log('Lyric:', currentLyrics[nextLyricIndex].lyric);
                     
-                    // Debug output for each lyric check, to help with timing calibration
-                    console.log(`Lyric at time: ${currentLyrics[nextLyricIndex].time}`);
-                    console.log(`Lyric: ${currentLyrics[nextLyricIndex].lyric}`);
-                    if (currentLyrics[nextLyricIndex].target) {
-                        console.log(`Target: ${currentLyrics[nextLyricIndex].target}`);
+                    // Only spawn a bullet during Get Ready phases after first lyrics have been played
+                    if (inGetReadyPhase && firstLyricsPlayed) {
+                        // Spawn a bullet on each lyric timestamp for rhythm-based gameplay
+                        let bullet = new Bullet(
+                            enemy.position.x - 5, 
+                            enemy.position.y, 
+                            enemy.position.z + 10 
+                        );
+                        scene.add(bullet.mesh);
+                        bullets.push(bullet);
+                        console.log("Bullet spawned on lyric timestamp at position:", bullet.mesh.position);
+                    } else {
+                        console.log("Skipped bullet spawn - not in Get Ready phase or first lyrics not played yet");
                     }
                     
                     if (currentLyrics[nextLyricIndex].target) {
@@ -948,21 +1847,23 @@
                                 clearTimeout(window.finalLineTimeout);
                             }
                             
-                            // Set a guaranteed timeout for the final line
+                            // Set a guaranteed timeout for the final word to ensure it consistently times out
                             window.finalLineTimeout = setTimeout(() => {
                                 // Only trigger if this target is still active
                                 if (currentTargetWord) {
-                                    console.log(`FINAL LINE FORCE TIMEOUT after ${timeWindow}s: "${currentTargetWord}"`);
+                                    console.log("Final word timeout triggered via explicit timer");
                                     
                                     // Trigger fail state
                                     showLyricIndicator("Failed: " + currentTargetWord, false);
                                     shakeScreen();
                                     
                                     // Show red vignette effect
-                                    const vignette = document.getElementById('red-vignette');
-                                    vignette.style.opacity = '0.6';
+                                    const vignette = document.getElementById('vignette-overlay');
+                                    vignette.style.opacity = '0.8'; // Increased opacity for better visibility
                                     setTimeout(() => {
-                                        vignette.style.opacity = '0';
+                                        if (vignette) {
+                                            vignette.style.opacity = '0';
+                                        }
                                     }, 500);
                                     
                                     // Update stats
@@ -1019,54 +1920,53 @@
                             
                             // Create a direct timeout for the final word to ensure it consistently times out
                             const finalWordTimeout = setTimeout(() => {
+                                // Only trigger if this target is still active
                                 if (currentTargetWord) {
                                     console.log("Final word timeout triggered via explicit timer");
                                     
-                                    // Only mark as failed if we didn't already complete it
-                                    if (!justCompletedTarget) {
-                                        showLyricIndicator("Failed: " + currentTargetWord, false);
-                                        shakeScreen();
-                                        
-                                        // Update total targets count for stats
-                                        totalTargets++;
-                                        
-                                        // Count the remaining untyped characters as incorrect inputs
-                                        const remainingChars = currentTargetWord.length - currentPlayerInput.length;
-                                        if (remainingChars > 0) {
-                                            incorrectInputs += remainingChars;
-                                            
-                                            // Update accuracy to reflect the incomplete word
-                                            const accuracy = Math.round((correctInputs / (correctInputs + incorrectInputs)) * 100);
-                                            document.getElementById('accuracy').textContent = accuracy + "%";
+                                    // Trigger fail state
+                                    showLyricIndicator("Failed: " + currentTargetWord, false);
+                                    shakeScreen();
+                                    
+                                    // Show red vignette effect
+                                    const vignette = document.getElementById('vignette-overlay');
+                                    vignette.style.opacity = '0.8'; // Increased opacity for better visibility
+                                    setTimeout(() => {
+                                        if (vignette) {
+                                            vignette.style.opacity = '0';
                                         }
-                                        
-                                        // Clear the target display but don't hide the container
-                                        document.getElementById('target').textContent = "";
-                                        document.getElementById('input').textContent = "";
-                                        
-                                        // Reset target variables
-                                        currentTargetWord = "";
-                                        currentPlayerInput = "";
-                                        targetStartTime = null;
-                                        
-                                        // Set song completion flag
-                                        console.log("Song completed - final target timed out");
-                                        songCompleted = true;
-                                        
-                                        // Show "Battle Won" message after the final timeout
-                                        const getReadyMessage = document.getElementById('get-ready-message');
-                                        getReadyMessage.textContent = "BATTLE WON";
-                                        getReadyMessage.style.display = 'block';
-                                        getReadyMessage.style.color = '#ffdd00';
-                                        getReadyMessage.style.textShadow = '0 0 10px #ffaa00, 0 0 20px #ff8800, 0 0 30px #ff6600';
-                                        getReadyMessage.style.fontSize = '3.5rem';
-                                        getReadyMessage.style.letterSpacing = '2px';
-                                        getReadyMessage.style.animation = 'battle-won-pulse 1.5s infinite';
-                                    }
+                                    }, 500);
+                                    
+                                    // Update stats
+                                    totalTargets++;
+                                    incorrectInputs += currentTargetWord.length - currentPlayerInput.length;
+                                    
+                                    // Update accuracy
+                                    const accuracy = Math.round((correctInputs / (correctInputs + incorrectInputs)) * 100);
+                                    document.getElementById('accuracy').textContent = accuracy + "%";
+                                    
+                                    // Reset everything
+                                    document.getElementById('target').textContent = "";
+                                    document.getElementById('input').textContent = "";
+                                    currentTargetWord = "";
+                                    currentPlayerInput = "";
+                                    targetStartTime = null;
+                                    
+                                    // Mark song as completed
+                                    console.log("Song completed - final target timed out via setTimeout");
+                                    songCompleted = true;
+                                    
+                                    // Show "Battle Won" message after the final timeout
+                                    const getReadyMessage = document.getElementById('get-ready-message');
+                                    getReadyMessage.textContent = "BATTLE WON";
+                                    getReadyMessage.style.display = 'block';
+                                    getReadyMessage.style.color = '#ffdd00';
+                                    getReadyMessage.style.textShadow = '0 0 10px #ffaa00, 0 0 20px #ff8800, 0 0 30px #ff6600';
+                                    getReadyMessage.style.fontSize = '3.5rem';
+                                    getReadyMessage.style.letterSpacing = '2px';
+                                    getReadyMessage.style.animation = 'battle-won-pulse 1.5s infinite';
                                 }
-                                // Always clear this timeout
-                                clearTimeout(finalWordTimeout);
-                            }, timeWindow * 1000); // Convert seconds to milliseconds
+                            }, timeWindow * 1000); // 4 seconds in milliseconds
                         }
                         
                         // Update the target display - ensure it's visible
@@ -1084,6 +1984,18 @@
                     const cleanLyric = currentLyrics[nextLyricIndex].lyric.replace(/[^\w\s]/g, '');
                     lyricsElement.textContent = cleanLyric;
                     lyricsElement.style.opacity = 1;
+                    
+                    console.log("Displaying lyric #" + nextLyricIndex + ": " + cleanLyric);
+                    
+                    // Set firstLyricsPlayed to true after the very first lyric is displayed
+                    if (!firstLyricsPlayed) {
+                        console.log("FIRST LYRIC DISPLAYED - Setting firstLyricsPlayed to true");
+                        firstLyricsPlayed = true;
+                    }
+                    
+                    // Reset Get Ready phase flag
+                    inGetReadyPhase = false;
+                    console.log("Exiting Get Ready phase, inGetReadyPhase = " + inGetReadyPhase);
                     
                     // Calculate fade out timing based on next lyric
                     let fadeOutTime = 4000; // Default 4 seconds
@@ -1108,6 +2020,16 @@
                     
                     // Important: Increment nextLyricIndex to move to the next lyric
                     nextLyricIndex++;
+                    console.log("LYRIC COMPLETED: Incremented nextLyricIndex to: " + nextLyricIndex);
+                    
+                    // Mark that first lyrics have been played
+                    if (!firstLyricsPlayed && nextLyricIndex > 0) {
+                        firstLyricsPlayed = true;
+                        console.log("IMPORTANT: First set of lyrics completed, bullets can now fire during Get Ready phases");
+                        console.log("State update: inGetReadyPhase =", inGetReadyPhase, "firstLyricsPlayed =", firstLyricsPlayed);
+                    } else {
+                        console.log("firstLyricsPlayed check - Current state: firstLyricsPlayed =", firstLyricsPlayed, "nextLyricIndex =", nextLyricIndex);
+                    }
                 }
                 
                 // Ensure we have a valid timeout check for the final target
@@ -1171,6 +2093,14 @@
                         getReadyMessage.style.fontSize = '3rem';
                         getReadyMessage.style.letterSpacing = 'normal';
                         getReadyMessage.style.animation = 'pulse 2s infinite';
+                        
+                        // Add this to track we're in a Get Ready phase
+                        inGetReadyPhase = true;
+                        console.log("Entering Get Ready phase, bullets can fire: " + firstLyricsPlayed);
+                        
+                        // Calculate early bullet stop time (3 seconds before next lyric)
+                        earlyBulletStopTime = Date.now() + (timeUntilNextLyric - 3) * 1000;
+                        console.log("Early bullet stop time set to:", earlyBulletStopTime);
                     } else if (timeUntilNextLyric <= 0.05 && timeUntilNextLyric > -0.2) {
                         // More precise timing: only force advance if we're extremely close to the time
                         // This reduces unnecessary forced advances while still preventing getting stuck
@@ -1179,6 +2109,15 @@
                         const cleanLyric = currentLyrics[nextLyricIndex].lyric.replace(/[^\w\s]/g, '');
                         lyricsElement.textContent = cleanLyric;
                         lyricsElement.style.opacity = 1;
+                        
+                        // Set firstLyricsPlayed to true after the very first lyric is displayed
+                        if (!firstLyricsPlayed) {
+                            console.log("FIRST LYRIC DISPLAYED (via forced advance) - Setting firstLyricsPlayed to true");
+                            firstLyricsPlayed = true;
+                        }
+                        
+                        // Reset Get Ready phase flag
+                        inGetReadyPhase = false;
                         
                         // If this lyric has a target, update the target word
                         if (currentLyrics[nextLyricIndex].target) {
@@ -1328,6 +2267,22 @@
             }, 1200);
         }
         
+        // A milder screen shake effect using direct style manipulation
+        function mildShakeScreen() {
+            // Get overlay element with null check
+            const overlay = document.getElementById('overlay');
+            if (!overlay) return;
+            
+            // Apply mild shake using direct style manipulation
+            overlay.style.transform = 'translate(2px, 2px)';
+            
+            // Quick reset sequence for mild shake effect
+            setTimeout(() => { overlay.style.transform = 'translate(-2px, -1px)'; }, 25);
+            setTimeout(() => { overlay.style.transform = 'translate(1px, -1px)'; }, 50);
+            setTimeout(() => { overlay.style.transform = 'translate(-1px, 0px)'; }, 75);
+            setTimeout(() => { overlay.style.transform = ''; }, 100); // Back to normal
+        }
+        
         // Variables for tracking game stats
         let targetsHit = 0;
         let totalTargets = 0;
@@ -1338,14 +2293,36 @@
         
         // Function to update the track
         function updateTrack() {
+            // Update player stats for the new level
+            if (currentLevel > 0) {
+                // Increase difficulty slightly for each level
+                document.getElementById('character-level').textContent = currentLevel + 1;
+                
+                // Speed text updates based on level
+                if (currentLevel <= 3) {
+                    document.getElementById('character-speed').textContent = "Normal";
+                } else if (currentLevel <= 6) {
+                    document.getElementById('character-speed').textContent = "Fast";
+                } else {
+                    document.getElementById('character-speed').textContent = "Insane";
+                }
+            }
+            
+            // Check if we're at the end of the tracks
             if (currentLevel >= tracks.length) {
-                currentLevel = 0;
+                console.log("End of tracks reached - game completed!");
+                currentLevel = 0; // Reset to first track (loop)
             }
             
             // Reset target tracking variables
             currentTargetWord = "";
             currentPlayerInput = "";
             targetStartTime = null;
+            
+            // Reset Get Ready phase tracking variables
+            inGetReadyPhase = false;
+            firstLyricsPlayed = false;
+            console.log("Track changed, reset bullet firing flags");
             
             audioElement.src = tracks[currentLevel].src;
             document.getElementById('trackName').textContent = `Level ${currentLevel + 1}: ${tracks[currentLevel].name}`;
@@ -1358,6 +2335,9 @@
             // Reset tracking stats
             document.getElementById('targets-hit').textContent = "0";
             document.getElementById('accuracy').textContent = "0%";
+            
+            // Reset enemy damage system for the new level
+            EnemyDamage.resetSystem();
             
             // Load lyrics if available
             loadLRC();
@@ -1396,7 +2376,7 @@
                     // Second section - recalibrated with -10s offset to fix timing
                     { time: 100.39, text: "FIRST CRACKS IN THE ARMOR'S SHEEN," },       // Was 105.39
                     { time: 104.58, text: "NOT ALL IS AS IT ONCE HAD SEEMED," },        // Was 109.58
-                    { time: 109.38, text: "SEEDS OF DOUBT, WHERE CONVICTION REAINED," },// Was 114.38
+                    { time: 109.38, text: "SEEDS OF DOUBT, WHERE CONVICTION REIGNED," },// Was 114.38
                     { time: 113.90, text: "BY THE BLOOD OF COUNTLESS, FAITH HAS BEEN STAINED." }, // Was 118.90
                     
                     // Third section - recalibrated timestamps
@@ -1472,7 +2452,7 @@
                 console.log(`Loaded ${currentLyrics.length} lyric lines for ${tracks[currentLevel].name}`);
                 
                 // Debug output of all lyrics with targets
-                for (let i = 0; i <currentLyrics.length; i++) {
+                for (let i = 0; i < currentLyrics.length; i++) {
                     const lyric = currentLyrics[i];
                     if (lyric.target) {
                         console.log(`Lyric at ${lyric.time}s: "${lyric.lyric}" - Target: "${lyric.target}"`);
@@ -1492,6 +2472,14 @@
                     }
                 }
             }
+            
+            // Set track data for enemy damage system
+            if (currentLyrics && currentLyrics.length > 0) {
+                EnemyDamage.setCurrentTrack({lyrics: currentLyrics});
+                console.log(`Set ${currentLyrics.length} lyrics for enemy damage calculation`);
+            }
+            
+            return currentLyrics;
         }
         
         // Function to start background music
@@ -1575,6 +2563,21 @@
             // Hide get ready message
             document.getElementById('get-ready-message').style.display = 'none';
             
+            // Reset characters to off-screen
+            if (character) character.position.set(-250, 2, 0);
+            if (enemy) enemy.position.set(250, 2, 0);
+            
+            // Clear all bullets
+            if (bullets && bullets.length > 0) {
+                bullets.forEach(bullet => {
+                    if (bullet && bullet.remove) bullet.remove();
+                });
+                bullets = [];
+            }
+            
+            // Set gameplay state
+            gameplayActive = false; // Will be set to true after animation
+            
             // Restart current track from beginning
             audioElement.currentTime = 0;
             audioElement.play();
@@ -1595,14 +2598,16 @@
             incorrectInputs = 0;
             document.getElementById('targets-hit').textContent = "0";
             document.getElementById('accuracy').textContent = "0%";
-            document.getElementById('character-score').textContent = "0";
             
             // Clear displays
             document.getElementById('target').textContent = "";
             document.getElementById('input').textContent = "";
             
-            // Resume game
-            gameStarted = true;
+            // Update track (which starts playback)
+            updateTrack();
+            
+            // Start character entrance animation
+            animateCharacterEntrance();
         });
         
         document.getElementById('restartCampaignButton').addEventListener('click', () => {
@@ -1611,6 +2616,21 @@
             
             // Hide get ready message
             document.getElementById('get-ready-message').style.display = 'none';
+            
+            // Reset characters to off-screen
+            if (character) character.position.set(-250, 2, 0);
+            if (enemy) enemy.position.set(250, 2, 0);
+            
+            // Clear all bullets
+            if (bullets && bullets.length > 0) {
+                bullets.forEach(bullet => {
+                    if (bullet && bullet.remove) bullet.remove();
+                });
+                bullets = [];
+            }
+            
+            // Set gameplay state
+            gameplayActive = false; // Will be set to true after animation
             
             // Reset to first level
             currentLevel = 0;
@@ -1634,58 +2654,18 @@
             document.getElementById('character-score').textContent = "0";
             document.getElementById('character-level').textContent = "1";
             
-            // Update track (which starts playback)
-            updateTrack();
-            
-            // Resume game
-            gameStarted = true;
-        });
-        
-        document.getElementById('quitButton').addEventListener('click', () => {
-            // Hide pause menu
-            document.getElementById('pauseMenu').style.display = 'none';
-            
-            // Show main menu
-            document.getElementById('mainMenu').style.display = 'flex';
-            
-            // Hide get ready message
-            document.getElementById('get-ready-message').style.display = 'none';
-            
-            // Pause and reset audio
-            audioElement.pause();
-            audioElement.currentTime = 0;
-            
-            // Restart the main menu music
-            startMusic();
-            audioElement.play().catch(error => console.error("Audio play error:", error));
-            
-            // Reset game variables
-            currentLyricIndex = 0;
-            nextLyricIndex = 0;
-            nextBeatIndex = 0;
-            currentTargetWord = "";
-            currentPlayerInput = "";
-            targetStartTime = null;
-            currentLevel = 0;
-            
-            // Reset stats
-            targetsHit = 0;
-            totalTargets = 0;
-            correctInputs = 0;
-            totalInputs = 0;
-            incorrectInputs = 0;
-            document.getElementById('targets-hit').textContent = "0";
-            document.getElementById('accuracy').textContent = "0%";
-            document.getElementById('character-score').textContent = "0";
-            document.getElementById('character-level').textContent = "1";
-            
             // Clear displays
             document.getElementById('target').textContent = "";
             document.getElementById('input').textContent = "";
             
-            // Set game as not started
-            gameStarted = false;
+            // Update track (which starts playback)
+            updateTrack();
+            
+            // Start character entrance animation
+            animateCharacterEntrance();
         });
+        
+        document.getElementById('quitButton').addEventListener('click', returnToMenu);
         
         // Start animation loop
         animate();
@@ -1697,6 +2677,113 @@
         document.getElementById('current-track').textContent = "None";
         document.getElementById('accuracy').textContent = "0%";
         document.getElementById('targets-hit').textContent = "0";
+        
+        // Debug function to spawn test bullets
+        function spawnTestBullet() {
+            console.log("Spawning test bullet");
+            // Spawn with random position near enemy
+            let x = enemy.position.x;
+            let y = enemy.position.y;
+            let z = enemy.position.z;
+            
+            let testBullet = new Bullet(x, y, z);
+            
+            // Override the default update method to move toward player
+            testBullet.update = function() { 
+                this.mesh.position.x -= 0.3; // Move toward player (left) - doubled from 0.15
+                
+                // Update trail position to follow behind bullet
+                this.trailMesh.position.copy(this.mesh.position);
+                this.trailMesh.position.x += 3.0; // Adjusted for the new custom trail shape
+            };
+            
+            // Rotate the trail to point along the X axis (for left/right movement)
+            // This replaces the default Y axis rotation
+            testBullet.trailMesh.rotation.x = 0;
+            testBullet.trailMesh.rotation.z = Math.PI / 2;
+            
+            // No need to add to scene here, the constructor does it
+            bullets.push(testBullet);
+            
+            // Add visual indication to debug panel
+            const debugInfoElement = document.getElementById('debug-info');
+            if (debugInfoElement) {
+                debugInfoElement.textContent += " | Bullet Spawned!";
+            }
+        }
+        
+        // Function to fire a steady stream of projectiles from the enemy
+        function fireEnemyStream() {
+            let bullet = new Bullet(enemy.position.x, enemy.position.y, enemy.position.z + 1); // Spawn just in front of enemy
+            
+            // Override the default update method to move toward player
+            bullet.update = function() { 
+                this.mesh.position.x -= 0.3; // Move toward player (left) - doubled from 0.15
+                
+                // Update trail position to follow behind bullet
+                this.trailMesh.position.copy(this.mesh.position);
+                this.trailMesh.position.x += 3.0; // Adjusted for the new custom trail shape
+            };
+            
+            // Rotate the trail to point along the X axis (for left/right movement)
+            // This replaces the default Y axis rotation
+            bullet.trailMesh.rotation.x = 0;
+            bullet.trailMesh.rotation.z = Math.PI / 2;
+            
+            // No need to add to scene here, the constructor does it
+            bullets.push(bullet);
+        }
+        
+        // Function to fire bullets from the top in vertical lanes
+        function fireVerticalLaneBullet() {
+            let lane = verticalLaneX[Math.floor(Math.random() * verticalLaneX.length)];
+            let bullet = new Bullet(lane, 0, 5); // Start at top
+            
+            // Override the default update method for downward movement
+            bullet.update = function() { 
+                this.mesh.position.z -= 0.4; // Move downward - doubled from 0.2
+                
+                // Update trail position to follow behind bullet
+                this.trailMesh.position.copy(this.mesh.position);
+                this.trailMesh.position.z += 3.0; // Adjusted for the new custom trail shape
+            };
+            
+            // No need to add to scene here, the constructor does it
+            bullets.push(bullet);
+        }
+        
+        // Function to fire horizontal bullets at head and feet heights
+        function fireHorizontalLaneBullet() {
+            let height = horizontalLaneY[Math.floor(Math.random() * horizontalLaneY.length)];
+            let bullet = new Bullet(5, height, 0); // Start from right side
+            
+            // For first level, make bullets slightly larger and more visible
+            if (currentLevel === 0) {
+                bullet.mesh.scale.set(1.2, 1.2, 1.2);
+                bullet.material.emissiveIntensity = 0.7; // More intense glow
+            }
+            
+            // Add debug logging
+            console.log("Firing horizontal bullet. inGetReadyPhase: " + inGetReadyPhase + 
+                        ", firstLyricsPlayed: " + firstLyricsPlayed);
+            
+            // Override the default update method for leftward movement (toward player)
+            bullet.update = function() { 
+                this.mesh.position.x -= 0.4; // Move left toward player - doubled from 0.2
+                
+                // Update trail position to follow behind bullet
+                this.trailMesh.position.copy(this.mesh.position);
+                this.trailMesh.position.x += 3.0; // Adjusted for the new custom trail shape
+            };
+            
+            // Rotate the trail to point along the X axis (for left/right movement)
+            // This replaces the default Y axis rotation
+            bullet.trailMesh.rotation.x = 0;
+            bullet.trailMesh.rotation.z = Math.PI / 2;
+            
+            // No need to add to scene here, the constructor does it
+            bullets.push(bullet);
+        }
         
         // Event Listeners
         document.addEventListener('keydown', (event) => {
@@ -1763,12 +2850,33 @@
                                 showLyricIndicator(`Success: ${completedTarget}`, true);
                                 showSuccessParticles();
                                 
+                                // Apply damage to enemy based on the completed target
+                                // Get current lyrics for damage calculation
+                                let currentLyricText = "";
+                                if (currentLyricIndex < currentLyrics.length && currentLyrics[currentLyricIndex]) {
+                                    currentLyricText = currentLyrics[currentLyricIndex].lyric || "";
+                                }
+                                
+                                // Apply damage through the damage system
+                                const damageResult = EnemyDamage.applyDamage(completedTarget, true, currentLyricText);
+                                
+                                // Enhanced visual feedback for significant damage
+                                if (damageResult.isFinalLine || damageResult.isDefeated) {
+                                    // Show more intense particle effects for final damage
+                                    showSuccessParticles();
+                                    setTimeout(() => showSuccessParticles(), 200);
+                                    setTimeout(() => showSuccessParticles(), 400);
+                                    
+                                    // Flash the screen with a stronger effect
+                                    const intensity = 0.3; // 30% intensity
+                                    mildShakeScreen(intensity * 1.5);
+                                }
+                                
                                 // Clear the target display to indicate completion after a short delay
                                 setTimeout(() => {
                                     // Clear target and input displays
                                     document.getElementById('target').textContent = "";
                                     document.getElementById('input').textContent = "";
-                                    document.getElementById('input').style.color = "white";
                                     
                                     // Current player input already cleared
                                     currentPlayerInput = "";
@@ -1788,8 +2896,6 @@
                                         getReadyMessage.style.fontSize = '3.5rem';
                                         getReadyMessage.style.letterSpacing = '2px';
                                         getReadyMessage.style.animation = 'battle-won-pulse 1.5s infinite';
-                                        
-                                        console.log("Showing Battle Won message (successful completion)");
                                     }
                                 }, 500);
                             }
@@ -1822,6 +2928,9 @@
                     currentPlayerInput = currentPlayerInput.slice(0, -1);
                     document.getElementById('input').textContent = currentPlayerInput;
                     document.getElementById('input').style.color = "white";
+                } else if (event.key === 'b' || event.key === 'B') {
+                    console.log("Manual bullet spawn triggered by key press");
+                    spawnTestBullet();
                 }
             }
         });
@@ -1866,6 +2975,569 @@
         }
         
         setInterval(checkForBattleWon, 100);
+        
+        // Initialize debug overlay when game starts
+        function initializeDebugOverlay() {
+            // Create debug info element if it doesn't exist
+            if (!document.getElementById('debug-info')) {
+                const debugInfoElement = document.createElement('div');
+                debugInfoElement.id = 'debug-info';
+                debugInfoElement.style.position = 'absolute';
+                debugInfoElement.style.bottom = '10px';
+                debugInfoElement.style.left = '10px';
+                debugInfoElement.style.color = '#00ff00';
+                debugInfoElement.style.fontFamily = 'monospace';
+                debugInfoElement.style.fontSize = '12px';
+                debugInfoElement.style.zIndex = '1000';
+                debugInfoElement.style.textShadow = '0 0 2px #000'; // Add shadow for visibility
+                debugInfoElement.textContent = "Debug: Active | Bullet Hell Mode";
+                document.body.appendChild(debugInfoElement);
+                
+                console.log("Debug overlay initialized");
+            }
+        }
+        
+        // Initialize game
+        function init() {
+            // Create red vignette overlay for hit feedback if it doesn't exist
+            if (!document.getElementById('red-vignette')) {
+                const redVignette = document.createElement('div');
+                redVignette.id = 'red-vignette';
+                redVignette.style.position = 'fixed';
+                redVignette.style.top = '0';
+                redVignette.style.left = '0';
+                redVignette.style.width = '100%';
+                redVignette.style.height = '100%';
+                redVignette.style.backgroundColor = 'rgba(255, 0, 0, 0)';
+                redVignette.style.pointerEvents = 'none';
+                redVignette.style.transition = 'background-color 0.1s, opacity 0.1s';
+                redVignette.style.zIndex = '999';
+                redVignette.style.opacity = '0';
+                document.body.appendChild(redVignette);
+            }
+            
+            // Initialize debug overlay
+            initializeDebugOverlay();
+            
+            // Initialize enemy movement system after all objects are created
+            EnemyMovement.init(enemy);
+            
+            // Initialize enemy damage system
+            EnemyDamage.init();
+        }
+        
+        // When game starts
+        function startGame() {
+            document.getElementById('mainMenu').style.display = 'none';
+            
+            inGame = true;
+            gameStarted = true;
+            gameplayActive = false; // Will be set to true after animation
+            
+            // Initialize debug overlay
+            initializeDebugOverlay();
+            
+            // Explicitly create health bar UI when the game starts
+            if (window.EnemyDamage && typeof EnemyDamage.init === 'function') {
+                console.log("Starting game - explicitly initializing enemy damage system");
+                EnemyDamage.init();
+                
+                // Explicitly show the health bar UI with a delay to ensure it appears after animations
+                setTimeout(() => {
+                    if (typeof EnemyDamage.showUI === 'function') {
+                        console.log("Explicitly showing health bar UI");
+                        EnemyDamage.showUI();
+                    }
+                }, 1000);
+            } else {
+                console.error("Enemy damage system not available!");
+            }
+            
+            animateCharacterEntrance();
+        }
+        
+        // Add keyboard event listeners for arrow key movement controls
+        window.addEventListener('keydown', function(event) {
+            switch(event.key) {
+                case 'ArrowLeft':
+                    characterMovement.keys.left = true;
+                    break;
+                case 'ArrowRight':
+                    characterMovement.keys.right = true;
+                    break;
+                case 'ArrowUp':
+                    characterMovement.keys.up = true;
+                    // Only jump if not already jumping
+                    if (!characterMovement.isJumping && !characterMovement.isCrouching) {
+                        characterMovement.yVelocity = characterMovement.jumpSpeed;
+                        characterMovement.isJumping = true;
+                    }
+                    break;
+                case 'ArrowDown':
+                    characterMovement.keys.down = true;
+                    if (!characterMovement.isJumping) {
+                        characterMovement.isCrouching = true;
+                    }
+                    break;
+            }
+        });
+        
+        window.addEventListener('keyup', function(event) {
+            switch(event.key) {
+                case 'ArrowLeft':
+                    characterMovement.keys.left = false;
+                    break;
+                case 'ArrowRight':
+                    characterMovement.keys.right = false;
+                    break;
+                case 'ArrowUp':
+                    characterMovement.keys.up = false;
+                    break;
+                case 'ArrowDown':
+                    characterMovement.keys.down = false;
+                    characterMovement.isCrouching = false;
+                    break;
+            }
+        });
+        
+        // Function to start gameplay after animation completes
+        function startGameplay() {
+            console.log("Starting gameplay after animation");
+            gameplayActive = true;
+            
+            // Show the enemy health bar UI with fade-in effect
+            if (window.EnemyDamage && window.EnemyDamage.showUI) {
+                console.log("Showing enemy health bar UI");
+                window.EnemyDamage.showUI();
+            } else {
+                console.warn("EnemyDamage.showUI not available");
+            }
+            
+            // Reset the debug overlay if it exists
+            const debugInfoElement = document.getElementById('debug-info');
+            if (debugInfoElement) {
+                debugInfoElement.textContent = "Debug: Gameplay Active";
+                debugInfoElement.style.color = '#00ff00';
+            }
+        }
+        
+        // Function to animate character entrance
+        function animateCharacterEntrance() {
+            console.log("Starting character entrance animation");
+            
+            // Check if characters exist
+            if (!character || !enemy) {
+                console.error("Character or enemy not defined yet!");
+                // Fall back to starting gameplay directly
+                startGameplay();
+                return;
+            }
+            
+            console.log("Initial positions - Character:", character.position.x, "Enemy:", enemy.position.x);
+            
+            // Target positions for animation end
+            const characterTargetX = -30;
+            const enemyTargetX = 30;
+            
+            // Animation timing variables
+            const animationDuration = 2000; // 2 seconds
+            const startTime = Date.now();
+            let progress = 0;
+            
+            // Animation function using requestAnimationFrame for smooth animation
+            function animate() {
+                // Calculate animation progress (0 to 1)
+                progress = Math.min((Date.now() - startTime) / animationDuration, 1);
+                
+                // Use easeOutBack for a slight bounce effect at the end
+                // Formula: https://easings.net/#easeOutBack
+                const easeOutBack = function(x) {
+                    const c1 = 1.70158;
+                    const c3 = c1 + 1;
+                    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+                };
+                
+                // Apply easing
+                const easedProgress = easeOutBack(progress);
+                
+                // Update character position with easing
+                character.position.x = -250 + (characterTargetX + 250) * easedProgress;
+                
+                // Update enemy position with easing
+                enemy.position.x = 250 + (enemyTargetX - 250) * easedProgress;
+                
+                // If animation is complete
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Animation is complete, start gameplay
+                    startGameplay();
+                }
+            }
+            
+            // Start the animation
+            animate();
+        }
+        
+        // Start game after character entrance animation
+        document.getElementById('startButton').addEventListener('click', startGame);
+        
+        // Function to return to the main menu and reset game state
+        function returnToMenu() {
+            console.log("Returning to main menu");
+            
+            // Reset game state flags
+            gameStarted = false;
+            inGame = false;
+            gameplayActive = false;
+            
+            // Move characters off-screen
+            if (character) character.position.set(-250, 2, 0);
+            if (enemy) enemy.position.set(250, 2, 0);
+            
+            // Clear all bullets
+            if (bullets && bullets.length > 0) {
+                bullets.forEach(bullet => {
+                    if (bullet && bullet.remove) bullet.remove();
+                });
+                bullets = [];
+            }
+            
+            // Set gameplay state
+            gameplayActive = false; // Will be set to true after animation
+            
+            // Hide pause menu
+            document.getElementById('pauseMenu').style.display = 'none';
+            
+            // Show main menu
+            document.getElementById('mainMenu').style.display = 'flex';
+            
+            // Hide get ready message
+            document.getElementById('get-ready-message').style.display = 'none';
+            
+            // Pause and reset audio
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            
+            // Restart the main menu music
+            startMusic();
+            audioElement.play().catch(error => console.error("Audio play error:", error));
+            
+            // Reset game variables
+            currentLyricIndex = 0;
+            nextLyricIndex = 0;
+            nextBeatIndex = 0;
+            currentTargetWord = "";
+            currentPlayerInput = "";
+            targetStartTime = null;
+            currentLevel = 0;
+            
+            // Reset stats
+            targetsHit = 0;
+            totalTargets = 0;
+            correctInputs = 0;
+            totalInputs = 0;
+            incorrectInputs = 0;
+            document.getElementById('targets-hit').textContent = "0";
+            document.getElementById('accuracy').textContent = "0%";
+            document.getElementById('character-score').textContent = "0";
+            document.getElementById('character-level').textContent = "1";
+            
+            // Clear displays
+            document.getElementById('target').textContent = "";
+            document.getElementById('input').textContent = "";
+        }
+        
+        // Helper function to store original materials of the character for restoration later
+        function captureOriginalMaterials(character) {
+            if (!character._originalMaterialsMap) {
+                character._originalMaterialsMap = new Map();
+                
+                // Function to recursively capture materials
+                const captureMaterial = (obj) => {
+                    // For single materials
+                    if (obj.material && !Array.isArray(obj.material)) {
+                        // Create a unique identifier for this material
+                        const id = obj.uuid;
+                        character._originalMaterialsMap.set(id, {
+                            material: obj.material.clone(),
+                            object: obj
+                        });
+                    }
+                    // For material arrays
+                    else if (obj.material && Array.isArray(obj.material)) {
+                        const id = obj.uuid;
+                        character._originalMaterialsMap.set(id, {
+                            materials: obj.material.map(m => m.clone()),
+                            object: obj,
+                            isArray: true
+                        });
+                    }
+                    
+                    // Process children recursively
+                    if (obj.children && obj.children.length > 0) {
+                        obj.children.forEach(child => captureMaterial(child));
+                    }
+                };
+                
+                // Start capturing from the character object
+                captureMaterial(character);
+                console.log(`Captured ${character._originalMaterialsMap.size} original materials for restoration`);
+            }
+        }
+        
+        // Improved function to restore original materials using the captured references
+        function restoreFromOriginals(character) {
+            if (character._originalMaterialsMap && character._originalMaterialsMap.size > 0) {
+                console.log(`Restoring ${character._originalMaterialsMap.size} original materials`);
+                
+                character._originalMaterialsMap.forEach((data, id) => {
+                    const obj = data.object;
+                    
+                    if (data.isArray && Array.isArray(obj.material)) {
+                        // Restore array of materials
+                        for (let i = 0; i < obj.material.length && i < data.materials.length; i++) {
+                            obj.material[i].copy(data.materials[i]);
+                            obj.material[i].needsUpdate = true;
+                        }
+                    } else if (!data.isArray && obj.material) {
+                        // Restore single material
+                        obj.material.copy(data.material);
+                        obj.material.needsUpdate = true;
+                    }
+                });
+                
+                return true;
+            }
+            
+            console.log("No original materials found to restore");
+            return false;
+        }
+        
+        // Call captureOriginalMaterials after character creation
+        captureOriginalMaterials(character);
+        
+        // Helper function to completely reset character colors
+        function resetCharacterColors(character) {
+            // Map of default colors for different types of parts
+            const defaultColors = {
+                body: new THREE.Color(0xff9fd4),    // Light pink for body
+                arm: new THREE.Color(0xff00ff),     // Neon magenta for arms
+                leg: new THREE.Color(0xff00ff),     // Neon magenta for legs
+                hand: new THREE.Color(0xff00ff),    // Neon magenta for hands
+                head: new THREE.Color(0xff9fd4),    // Light pink for head
+                weapon: new THREE.Color(0x555555)   // Gray for weapon parts
+            };
+            
+            // Function to identify the type of part and assign proper color
+            const identifyPart = (name) => {
+                if (!name) return 'body';
+                
+                const nameLower = name.toLowerCase();
+                if (nameLower.includes('arm')) return 'arm';
+                if (nameLower.includes('leg')) return 'leg';
+                if (nameLower.includes('hand')) return 'hand';
+                if (nameLower.includes('head')) return 'head';
+                if (nameLower.includes('weapon')) return 'weapon';
+                
+                // Default to body color
+                return 'body';
+            };
+            
+            // Function to reset a material's color based on object name
+            const resetMaterial = (material, objName) => {
+                if (material && material.color) {
+                    // Get part type and corresponding color
+                    const partType = identifyPart(objName);
+                    const color = defaultColors[partType] || defaultColors.body;
+                    
+                    // Apply correct default color
+                    material.color.copy(color);
+                    
+                    // Reset emissive if present
+                    if (material.emissive) {
+                        material.emissive.set(0x000000);
+                    }
+                    
+                    material.needsUpdate = true;
+                }
+            };
+            
+            // Function to recursively process an object and its children
+            const processObject = (obj) => {
+                // Reset material directly attached to this object
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach(mat => resetMaterial(mat, obj.name));
+                    } else {
+                        resetMaterial(obj.material, obj.name);
+                    }
+                }
+                
+                // Process all children recursively
+                if (obj.children && obj.children.length > 0) {
+                    obj.children.forEach(processObject);
+                }
+            };
+            
+            // Start from the character object
+            processObject(character);
+            
+            console.log("Character colors completely reset");
+        }
+        
+        // Function to completely reset all character parts to their original colors
+        function resetCompleteCharacter(character) {
+            console.log("Applying complete character reset");
+            
+            // Set a flag on the character to indicate it was just reset
+            // This will help animation code know not to immediately override our colors
+            character.justReset = true;
+            
+            // First, let's identify all weapon parts by their positions
+            const weaponParts = [];
+            const cyanParts = [];
+            
+            // Process each child to identify weapon parts by position
+            character.children.forEach((child, index) => {
+                if (!child.material) return;
+                
+                // Weapon parts are generally positioned in front of the character (z > 1.5)
+                // and around the center of the character (x values around 3-7)
+                if (child.position.z >= 1.5 && child.position.x >= 2 && child.position.x <= 8) {
+                    console.log(`Found weapon part at index ${index}:`, child.position);
+                    
+                    // Cyan parts (core and glow)
+                    if ((Math.abs(child.position.x - 3) < 1.5 && child.position.y < 2.5) || // Core
+                        child.position.x > 6) { // Glow at end of barrel
+                        cyanParts.push(child);
+                        
+                        // Mark as special parts for animation
+                        if (Math.abs(child.position.x - 3) < 1.5) {
+                            child.isWeaponCore = true;
+                        } else {
+                            child.isWeaponGlow = true;
+                        }
+                    } 
+                    // Gray weapon parts (body, barrel, etc)
+                    else {
+                        weaponParts.push(child);
+                    }
+                }
+            });
+            
+            console.log(`Identified ${weaponParts.length} weapon parts and ${cyanParts.length} cyan parts`);
+            
+            // Reset weapon parts to gray shades
+            weaponParts.forEach((part, i) => {
+                if (!part.material) return;
+                
+                // Determine the gray shade based on the part's position
+                let color;
+                
+                // Main body - medium gray
+                if (Math.abs(part.position.y - 2) < 0.5 && part.position.x < 5) {
+                    color = 0x555555; // Medium gray
+                }
+                // Top rail - very dark gray (higher Y position)
+                else if (part.position.y > 2.3) {
+                    color = 0x222222; // Very dark gray
+                }
+                // Grip or barrel - darker gray
+                else {
+                    color = 0x333333; // Darker gray
+                }
+                
+                console.log(`  Setting weapon part ${i} at position (${part.position.x.toFixed(1)}, ${part.position.y.toFixed(1)}, ${part.position.z.toFixed(1)}) to color ${color.toString(16)}`);
+                
+                // Apply the color
+                if (Array.isArray(part.material)) {
+                    part.material.forEach(mat => {
+                        if (mat && mat.color) {
+                            mat.color.setHex(color);
+                            if (mat.emissive) mat.emissive.set(0x000000);
+                            mat.needsUpdate = true;
+                        }
+                    });
+                } else if (part.material && part.material.color) {
+                    part.material.color.setHex(color);
+                    if (part.material.emissive) part.material.emissive.set(0x000000);
+                    part.material.needsUpdate = true;
+                }
+            });
+            
+            // Reset cyan parts
+            cyanParts.forEach((part, i) => {
+                if (!part.material) return;
+                
+                console.log(`  Setting cyan part ${i} at position (${part.position.x.toFixed(1)}, ${part.position.y.toFixed(1)}, ${part.position.z.toFixed(1)}) to cyan`);
+                
+                // Apply cyan color
+                if (Array.isArray(part.material)) {
+                    part.material.forEach(mat => {
+                        if (mat && mat.color) {
+                            mat.color.setHex(0x00ffff); // Cyan
+                            if (mat.emissive) mat.emissive.set(0x000000);
+                            mat.needsUpdate = true;
+                        }
+                    });
+                } else if (part.material && part.material.color) {
+                    part.material.color.setHex(0x00ffff); // Cyan
+                    if (part.material.emissive) part.material.emissive.set(0x000000);
+                    part.material.needsUpdate = true;
+                }
+            });
+            
+            // Apply standard colors to non-weapon parts
+            character.children.forEach((child, index) => {
+                // Skip weapon parts we already handled
+                if (weaponParts.includes(child) || cyanParts.includes(child)) {
+                    return;
+                }
+                
+                if (!child.material) return;
+                
+                // Determine the correct color
+                let color;
+                
+                // Visor is cyan (usually index 2)
+                if (index === 2) {
+                    color = 0x00ffff; // Cyan
+                }
+                // All other body parts should be magenta
+                else {
+                    color = 0xff00ff; // Neon magenta
+                }
+                
+                // Apply the color
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => {
+                        if (mat && mat.color) {
+                            mat.color.setHex(color);
+                            if (mat.emissive) mat.emissive.set(0x000000);
+                            mat.needsUpdate = true;
+                        }
+                    });
+                } else if (child.material && child.material.color) {
+                    child.material.color.setHex(color);
+                    if (child.material.emissive) child.material.emissive.set(0x000000);
+                    child.material.needsUpdate = true;
+                }
+            });
+            
+            // Reset the flag after a short delay to allow normal animations to resume
+            setTimeout(() => {
+                character.justReset = false;
+            }, 25);
+            
+            // Force renderer update
+            console.log("Character colors reset complete");
+        }
     </script>
+    
+    <!-- Bullet collision fix script -->
+    <script src="bullet_collision_fix.js"></script>
+    <!-- Bullet origin fix script -->
+    <script src="bullet_origin_fix.js"></script>
 </body>
 </html>
